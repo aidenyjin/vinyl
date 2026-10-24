@@ -8,6 +8,7 @@ import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { APPS, ACTIONS, PermissionError, artwork, command, readApp, trackId } from './players.js';
+import { buildHelper, subjectMask } from './depth.js';
 
 const PORT = Number(process.env.PORT) || 4747;
 const HOST = process.env.HOST || '127.0.0.1';
@@ -34,6 +35,7 @@ let state = IS_MAC
   : { ok: true, available: false, status: 'unsupported', message: 'Live mode needs macOS.' };
 let lastSource = null;
 const arts = new Map(); // id -> Promise<{type, data} | null>
+const masks = new Map(); // id -> Promise<Buffer | null>
 
 function pick(infos) {
   const withTrack = infos.filter((i) => i && i.track);
@@ -178,6 +180,18 @@ async function serveArt(id, res) {
   res.end(art.data);
 }
 
+async function serveDepth(id, res) {
+  if (!arts.has(id)) return send(res, 404, { error: 'No artwork for this song.' });
+  if (!masks.has(id)) {
+    masks.set(id, arts.get(id).then(subjectMask));
+    if (masks.size > 40) masks.delete(masks.keys().next().value);
+  }
+  const mask = await masks.get(id);
+  if (!mask) return send(res, 204, '');
+  res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'private, max-age=86400' });
+  res.end(mask);
+}
+
 async function serveStatic(pathname, res) {
   let rel;
   try {
@@ -207,6 +221,7 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/events' && req.method === 'GET') return subscribe(req, res);
     if (pathname === '/api/control' && req.method === 'POST') return await control(req, res);
     if (pathname.startsWith('/api/artwork/') && req.method === 'GET') return await serveArt(pathname.slice(13), res);
+    if (pathname.startsWith('/api/depth/') && req.method === 'GET') return await serveDepth(pathname.slice(11), res);
     if (req.method === 'GET' || req.method === 'HEAD') return await serveStatic(pathname, res);
     send(res, 405, 'Method not allowed', 'text/plain');
   } catch (err) {
@@ -227,5 +242,6 @@ server.listen(PORT, HOST, () => {
   const url = `http://localhost:${PORT}`;
   console.log(`\n  Vinyl is spinning at ${url}\n`);
   if (!IS_MAC) console.log('  This computer is not a Mac, so the page will play its demo playlist.\n');
+  if (IS_MAC) buildHelper();
   if (IS_MAC && !process.env.NO_OPEN) execFile('open', [url], () => {});
 });

@@ -62,8 +62,35 @@
       const n = d.length / 4;
       cover.avg = [r / n, g / n, b / n].map(Math.round);
       cover.lum = lum(cover.avg);
+      cover.frame = findFrame(img);
     } catch { /* a cover from file:// can't be read back; it still draws */ }
     return cover;
+  }
+
+  // Some covers are printed inside a frame, like a photo's white edge, which shows as a rim on
+  // the round label. The frame is every row and column in from each edge that is mostly the
+  // corners' colour. Returns the picture inside it, in fractions of the cover, or null.
+  function findFrame(img) {
+    const N = 100;
+    const c = document.createElement('canvas');
+    c.width = c.height = N;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, N, N);
+    const d = ctx.getImageData(0, 0, N, N).data;
+    const at = (x, y) => (y * N + x) * 4;
+    const corners = [at(0, 0), at(N - 1, 0), at(0, N - 1), at(N - 1, N - 1)];
+    const edge = [0, 1, 2].map((k) => corners.reduce((sum, i) => sum + d[i + k], 0) / 4);
+    const near = (i) => Math.abs(d[i] - edge[0]) + Math.abs(d[i + 1] - edge[1]) + Math.abs(d[i + 2] - edge[2]) < 48;
+    if (!corners.every(near)) return null;
+    // Writing on the frame (a title, a name) can cover nearly half a line.
+    const line = (fn) => { let k = 0; for (let j = 0; j < N; j++) if (near(fn(j))) k++; return k / N >= 0.5; };
+    const inset = (fn) => { let n = 0; while (n < 16 && line((j) => fn(n, j))) n++; return n; };
+    const top = inset((n, j) => at(j, n)), bottom = inset((n, j) => at(j, N - 1 - n));
+    const left = inset((n, j) => at(n, j)), right = inset((n, j) => at(N - 1 - n, j));
+    // A frame is thin on every side; anything wider is the cover's own background.
+    if (Math.min(top, bottom, left, right) < 1 || Math.max(top, bottom, left, right) >= 16) return null;
+    const pad = 1; // clear the soft edge where frame meets picture
+    return { x: (left + pad) / N, y: (top + pad) / N, w: (N - left - right - 2 * pad) / N, h: (N - top - bottom - 2 * pad) / N };
   }
 
   // The ambient light is the cover itself: drawn small, blurred, saturated, then shown huge.
@@ -150,7 +177,7 @@
     }
 
     // ---------- physics ----------
-    const phys = { platterV: 0, rec: Math.random() * 360, recV: 0, arm: REST, armV: 0, lift: 0, sheen: 0, sheenV: 0, sheenTarget: 0, seated: false };
+    const phys = { platterV: 0, rec: Math.random() * 360, recV: 0, arm: REST, armV: 0, lift: 0, sheen: 0, sheenV: 0, sheenTarget: 0, seated: false, look: 0, lookPhase: 0 };
     const geom = { R: 300, scrubW: 300 };
     let shown = null, pending = null, swapping = false;
     const approach = (v, target, tau, dt) => v + (target - v) * (1 - Math.exp(-dt / tau));
@@ -190,7 +217,12 @@
       phys.sheenV += (k * (phys.sheenTarget - phys.sheen) - c * phys.sheenV) * dt;
       phys.sheen += phys.sheenV * dt;
 
-      return Math.abs(phys.platterV) > 0.05 || Math.abs(phys.recV) > 0.05 || far ||
+      // While a song plays, the view into the cover circles slowly, once every 16s, so its
+      // depth shows; on pause it comes to rest.
+      phys.look = approach(phys.look, playing() && !reduced ? 1 : 0, 1.5, dt);
+      if (phys.look > 0.001) phys.lookPhase += dt * (2 * Math.PI / 16);
+
+      return phys.look > 0.001 || Math.abs(phys.platterV) > 0.05 || Math.abs(phys.recV) > 0.05 || far ||
         Math.abs(phys.lift - lift) > 0.002 || Math.abs(phys.armV) > 0.01 ||
         Math.abs(phys.sheenTarget - phys.sheen) > 0.01 || Math.abs(phys.sheenV) > 0.01 ||
         playing() || scrubbing != null || swapping || home;
@@ -206,6 +238,7 @@
           `translate(${(R * (0.012 + 0.045 * lift)).toFixed(1)}px, ${(R * (0.02 + 0.07 * lift)).toFixed(1)}px) rotate(${phys.arm.toFixed(3)}deg)`;
         el.armShadow.style.opacity = (0.45 - 0.2 * lift).toFixed(3);
       }
+      depth.draw(0.75 * phys.look * Math.cos(phys.lookPhase), 0.5 * phys.look * Math.sin(phys.lookPhase));
       renderProgress();
     }
 
@@ -280,6 +313,15 @@
       const img = new Image();
       img.alt = '';
       img.src = cover.url;
+      // On the label, a framed cover is shown from inside its frame.
+      const f = holder === el.label && cover.frame;
+      if (f) {
+        const k = 100 / Math.min(f.w, f.h);
+        Object.assign(img.style, {
+          width: `${k}%`, height: `${k}%`,
+          left: `${50 - (f.x + f.w / 2) * k}%`, top: `${50 - (f.y + f.h / 2) * k}%`,
+        });
+      }
       holder.append(img);
       if (fade && !reduced) {
         img.animate([{ opacity: 0, filter: 'blur(4px)' }, { opacity: 1, filter: 'blur(0)' }], { duration: 300, easing: EASE_OUT })
@@ -288,6 +330,121 @@
         old.forEach((n) => n.remove());
       }
     }
+
+    // ---------- depth ----------
+    // The cover's subject lifts off the sleeve. The helper finds the subject (api/depth); here
+    // it becomes a soft depth map, nearer toward the bottom, and a WebGL layer over the cover
+    // shifts each pixel by its depth as the view circles. Until then the plain cover shows.
+    const depth = (() => {
+      const VERT = 'attribute vec2 p; varying vec2 uv; void main() { uv = vec2(p.x, -p.y) * 0.5 + 0.5; gl_Position = vec4(p, 0.0, 1.0); }';
+      // Each pixel looks back along its shift a few times, so the subject's edge stays clean.
+      // The cover's own edges hold still, so nothing past them is ever shown.
+      const FRAG = `precision mediump float;
+        uniform sampler2D art, dep; uniform vec2 shift; varying vec2 uv;
+        void main() {
+          vec2 e = min(uv, 1.0 - uv);
+          vec2 s = shift * smoothstep(0.0, 0.1, min(e.x, e.y));
+          vec2 q = uv;
+          for (int i = 0; i < 5; i++) q = uv - s * (texture2D(dep, q).r - 0.2);
+          gl_FragColor = texture2D(art, clamp(q, 0.0, 1.0));
+        }`;
+      let canvas = null, gl = null, ready = false, token = 0, drawn = '';
+
+      function setup() {
+        canvas = document.createElement('canvas');
+        canvas.className = 'depth';
+        gl = canvas.getContext('webgl', { premultipliedAlpha: false, antialias: false });
+        if (!gl) return false;
+        const prog = gl.createProgram();
+        for (const [type, src] of [[gl.VERTEX_SHADER, VERT], [gl.FRAGMENT_SHADER, FRAG]]) {
+          const sh = gl.createShader(type);
+          gl.shaderSource(sh, src);
+          gl.compileShader(sh);
+          gl.attachShader(prog, sh);
+        }
+        gl.linkProgram(prog);
+        if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return false;
+        gl.useProgram(prog);
+        gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+        gl.enableVertexAttribArray(0);
+        gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+        [['art', 0], ['dep', 1]].forEach(([name, unit]) => {
+          gl.uniform1i(gl.getUniformLocation(prog, name), unit);
+          gl.activeTexture(gl.TEXTURE0 + unit);
+          gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        });
+        canvas.shift = gl.getUniformLocation(prog, 'shift');
+        el.sleeve.append(canvas);
+        return true;
+      }
+
+      // Depth from the mask: the ground comes nearer toward the bottom; the subject stands in front.
+      function depthMap(mask) {
+        const c = document.createElement('canvas');
+        c.width = c.height = 256;
+        const ctx = c.getContext('2d');
+        const g = ctx.createLinearGradient(0, 0, 0, 256);
+        g.addColorStop(0, '#000');
+        g.addColorStop(1, '#5a5a5a');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 256, 256);
+        if (mask) {
+          ctx.globalCompositeOperation = 'lighten';
+          ctx.filter = 'blur(5px)';
+          ctx.globalAlpha = 0.9;
+          ctx.drawImage(mask, 0, 0, 256, 256);
+        }
+        return c;
+      }
+
+      function hide() {
+        token++;
+        ready = false;
+        if (canvas) canvas.style.opacity = '0';
+      }
+
+      async function show(track, cover) {
+        hide();
+        const mine = token;
+        if (reduced || model.mode !== 'live' || !cover?.img || !el.sleeve) return;
+        let mask;
+        try {
+          const res = await fetch(`${o.apiBase}api/depth/${encodeURIComponent(track.id)}`);
+          // 204: no clear subject, so the cover gets only the ground.
+          if (res.status === 200) mask = await createImageBitmap(await res.blob());
+          else if (res.status !== 204) return;
+        } catch { return; }
+        if (mine !== token || !alive) return;
+        if (!canvas && !setup()) { canvas = null; return; }
+        const S = Math.min(1600, Math.round(el.sleeve.offsetWidth * (devicePixelRatio || 1)));
+        canvas.width = canvas.height = S;
+        gl.viewport(0, 0, S, S);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cover.img);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, depthMap(mask));
+        el.sleeve.append(canvas); // on top of the cover
+        ready = true;
+        drawn = '';
+        draw(0.75 * phys.look * Math.cos(phys.lookPhase), 0.5 * phys.look * Math.sin(phys.lookPhase));
+        canvas.style.opacity = '1';
+      }
+
+      function draw(x, y) {
+        if (!ready) return;
+        const key = x.toFixed(4) + y.toFixed(4);
+        if (key === drawn) return;
+        drawn = key;
+        gl.uniform2f(canvas.shift, x * 0.035, y * 0.035);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      }
+
+      return { show, hide, draw };
+    })();
 
     // ---------- the record swap ----------
     // A short, direction-aware slide: next arrives from the right, previous from the left.
@@ -390,6 +547,7 @@
         setArt(el.label, cover || null, false);
         setArt(el.sleeve, cover || null, false);
         showAmbient(cover || null);
+        depth.show(track, cover);
         if (textFor !== track) { writeText(track); textIn(); }
         textFor = null;
         phys.recV = 0;
@@ -398,7 +556,7 @@
         phys.seated = true;
         if (cover === undefined) {
           loadCover(track.art).then((c) => {
-            if (c && alive && shown === track) { setArt(el.label, c, true); setArt(el.sleeve, c, true); showAmbient(c); }
+            if (c && alive && shown === track) { setArt(el.label, c, true); setArt(el.sleeve, c, true); showAmbient(c); depth.show(track, c); }
           });
         }
         if (pending) {

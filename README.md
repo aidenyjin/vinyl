@@ -6,6 +6,7 @@ A turntable for your Mac's screen. Vinyl shows the song playing in Apple Music o
 - The tonearm is the progress bar. It moves from the edge of the record toward the label as the song plays, and cues across the record when you scrub.
 - Skip forward and the next record arrives from the right; skip back and it comes from the left.
 - Play, pause, skip, seek and volume all control the real app on your Mac. Tap the record to pause it.
+- While the music plays, the cover's subject stands out from it in 3D, and the view moves slowly so you can see the depth. Your Mac finds the subject, as Photos does when you lift one out of a picture. This needs the Xcode command line tools (`xcode-select --install`); without them the covers stay flat.
 
 ## Run it
 
