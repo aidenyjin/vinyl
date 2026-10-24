@@ -6,6 +6,7 @@
 <title>Vinyl</title>
 <meta name="description" content="A turntable that shows what your Mac is playing.">
 <meta name="theme-color" content="#1c221f">
+<meta name="color-scheme" content="dark light">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Vinyl">
 <link rel="manifest" href="manifest.webmanifest">
@@ -18,6 +19,8 @@
 <main class="app" id="app" data-playing="false" data-mode="demo">
   <div class="stage" id="stage">
     <div class="deck" aria-hidden="true">
+      <div class="plinth"></div>
+      <span class="mark">Vinyl</span>
       <div class="platter"><div class="strobe" id="strobe"></div></div>
       <div class="record" id="record">
         <div class="vinyl"></div>
@@ -28,6 +31,7 @@
         </div>
         <div class="sheen" id="sheen"></div>
       </div>
+      <div class="lamp"></div>
       <div class="spindle"></div>
       <svg class="arm-base" viewBox="-20 -30 40 180">
         <defs>
@@ -91,52 +95,50 @@
       </svg>
     </div>
 
-    <section class="panel" id="panel" aria-label="Now playing">
-      <p class="source" id="source"><span class="dot" aria-hidden="true"></span><span id="sourceText">Demo playlist</span></p>
+    <div class="strip" role="group" aria-label="Playback">
+      <button class="key play" id="play" type="button" aria-label="Play">
+        <svg class="icon i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.3v13.4a.9.9 0 0 0 1.4.8l10.4-6.7a.9.9 0 0 0 0-1.6L9.4 4.5A.9.9 0 0 0 8 5.3z"/></svg>
+        <svg class="icon i-pause" viewBox="0 0 24 24" aria-hidden="true"><rect x="6.2" y="5" width="4" height="14" rx="1"/><rect x="13.8" y="5" width="4" height="14" rx="1"/></svg>
+      </button>
+      <button class="key" id="prev" type="button" aria-label="Previous song">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5.5h2.2v13H6zM19 6.2v11.6a.8.8 0 0 1-1.2.7L9.4 12.7a.8.8 0 0 1 0-1.4l8.4-5.8a.8.8 0 0 1 1.2.7z"/></svg>
+      </button>
+      <button class="key" id="next" type="button" aria-label="Next song">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.8 5.5H18v13h-2.2zM5 6.2v11.6a.8.8 0 0 0 1.2.7l8.4-5.8a.8.8 0 0 0 0-1.4L6.2 5.5A.8.8 0 0 0 5 6.2z"/></svg>
+      </button>
+      <div class="fader" id="knob" role="slider" tabindex="0" aria-label="Volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="64">
+        <span class="groove"><span class="level" id="knobLevel"></span></span>
+        <span class="cap" id="knobCap"></span>
+      </div>
+      <span class="vol" id="knobValue" aria-hidden="true">64</span>
+    </div>
 
+    <section class="panel" id="panel" aria-label="Now playing">
       <div class="meta" id="meta" aria-live="polite">
         <h1 class="title" id="title">Clair de lune</h1>
         <p class="artist" id="artist">Claude Debussy</p>
         <p class="album" id="album">Suite bergamasque</p>
       </div>
 
-      <div class="progress">
-        <div class="scrub" id="scrub" role="slider" tabindex="0" aria-label="Song position" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
-          <div class="track"></div>
-          <div class="fill" id="fill"></div>
-          <div class="thumb" id="thumb"></div>
+      <div class="foot">
+        <div class="progress">
+          <div class="scrub" id="scrub" role="slider" tabindex="0" aria-label="Song position" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
+            <div class="track"></div>
+            <div class="fill" id="fill"></div>
+            <div class="thumb" id="thumb"></div>
+          </div>
+          <div class="times"><span id="elapsed">0:00</span><span id="remaining">-0:00</span></div>
         </div>
-        <div class="times"><span id="elapsed">0:00</span><span id="remaining">-0:00</span></div>
+        <p class="source" id="source"><span class="dot" aria-hidden="true"></span><span id="sourceText">Demo playlist</span></p>
+        <p class="credit" id="credit"></p>
       </div>
-
-      <div class="controls">
-        <button class="btn" id="prev" type="button" aria-label="Previous song">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5.5h2.2v13H6zM19 6.2v11.6a.8.8 0 0 1-1.2.7L9.4 12.7a.8.8 0 0 1 0-1.4l8.4-5.8a.8.8 0 0 1 1.2.7z"/></svg>
-        </button>
-        <button class="btn play" id="play" type="button" aria-label="Play">
-          <svg class="icon i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.3v13.4a.9.9 0 0 0 1.4.8l10.4-6.7a.9.9 0 0 0 0-1.6L9.4 4.5A.9.9 0 0 0 8 5.3z"/></svg>
-          <svg class="icon i-pause" viewBox="0 0 24 24" aria-hidden="true"><rect x="6.2" y="5" width="4" height="14" rx="1"/><rect x="13.8" y="5" width="4" height="14" rx="1"/></svg>
-        </button>
-        <button class="btn" id="next" type="button" aria-label="Next song">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.8 5.5H18v13h-2.2zM5 6.2v11.6a.8.8 0 0 0 1.2.7l8.4-5.8a.8.8 0 0 0 0-1.4L6.2 5.5A.8.8 0 0 0 5 6.2z"/></svg>
-        </button>
-        <div class="knob" id="knob" role="slider" tabindex="0" aria-label="Volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="64">
-          <svg viewBox="0 0 48 48" aria-hidden="true">
-            <circle class="knob-track" cx="24" cy="24" r="20"/>
-            <circle class="knob-level" id="knobLevel" cx="24" cy="24" r="20"/>
-          </svg>
-          <span id="knobValue">64</span>
-        </div>
-      </div>
-
-      <p class="credit" id="credit"></p>
     </section>
 
     <button class="corner" id="fullscreen" type="button" aria-label="Full screen">
       <svg class="i-enter" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
       <svg class="i-exit" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>
     </button>
-    <p class="keys"><span><kbd>Space</kbd> play or pause</span><span><kbd>←</kbd><kbd>→</kbd> skip</span><span><kbd>F</kbd> full screen</span></p>
+    <p class="keys"><span><kbd>Space</kbd> play or pause</span><span><kbd>←</kbd><kbd>→</kbd> skip</span><span><kbd>↑</kbd><kbd>↓</kbd> volume</span><span><kbd>F</kbd> full screen</span></p>
   </div>
 </main>
 <script src="demo.js"></script>

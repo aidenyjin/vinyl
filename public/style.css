@@ -15,81 +15,76 @@
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
-/* The three colours are registered so a new cover can repaint the room smoothly. */
+/* The colours are registered so a new cover can repaint the room smoothly. */
 @property --field { syntax: '<color>'; inherits: true; initial-value: #1c221f; }
 @property --ink { syntax: '<color>'; inherits: true; initial-value: #eef1ec; }
 @property --accent { syntax: '<color>'; inherits: true; initial-value: #d8c46c; }
 @property --on-accent { syntax: '<color>'; inherits: true; initial-value: #1c221f; }
 
-/* Layout: a turntable seen from above, lying on a field of colour taken from the cover.
-   The song sits to the right of the tonearm, or under the record on narrow screens. */
+/* A turntable seen from above, standing on a table the colour of the cover.
+   The deck is one object: the playback controls are its own keys and fader.
+   The song is set as type beside it, or under it on narrow screens. */
 :root {
   --field: #1c221f;       /* the room, flattened from the cover's main colour */
-  --ink: #eef1ec;         /* text and icons, light or dark against the field */
-  --accent: #d8c46c;      /* the cover's strongest colour, used on the play button */
+  --ink: #eef1ec;         /* text, light or dark against the field */
+  --accent: #d8c46c;      /* the cover's strongest colour: the start key and the progress */
   --on-accent: #1c221f;
-  --vinyl: #0e0e0f;
+  --muted: color-mix(in oklab, var(--ink) 66%, var(--field));
   --step: color-mix(in oklab, var(--ink) 11%, var(--field));
   --step-hi: color-mix(in oklab, var(--ink) 19%, var(--field));
-  --muted: color-mix(in oklab, var(--ink) 70%, var(--field));
 
-  --font: 'Archivo', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+  /* The deck is smoked and dark whatever the room, tinted a little by it. */
+  --body: color-mix(in oklab, var(--field) 26%, #111113);
+  --key: color-mix(in oklab, #ffffff 10%, var(--body));
+  --key-hi: color-mix(in oklab, #ffffff 16%, var(--body));
+  --key-ink: #ebebe6;
+  --etch: rgba(255, 255, 255, 0.3);
+  --lamp: #ff8a3d;
+  --vinyl: #0e0e0f;
+
+  --font: 'Archivo', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-icon: cubic-bezier(0.2, 0, 0, 1);
   --repaint: 900ms;
 
   color-scheme: dark;
   transition: --field var(--repaint) ease, --ink var(--repaint) ease, --accent var(--repaint) ease, --on-accent var(--repaint) ease;
 }
 
-html, body { height: 100%; }
+html {
+  height: 100%;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none;
+}
 body {
+  height: 100%;
   margin: 0;
   background: var(--field);
   color: var(--ink);
   font-family: var(--font);
   font-size: 16px;
   overflow: hidden;
+  overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
-  -webkit-tap-highlight-color: transparent;
 }
+::selection { background: var(--accent); color: var(--on-accent); }
 
-.app { position: relative; height: 100%; overflow: hidden; container-type: size; }
+.app { position: relative; height: 100%; height: 100dvh; overflow: hidden; container-type: size; }
 
-/* ---------- geometry ---------- */
-/* R is the record's radius. Everything on the deck is measured in it. */
-.stage {
-  position: absolute;
-  inset: 0;
-  --gutter-l: max(16px, env(safe-area-inset-left, 0px));
-  --gutter-r: max(16px, env(safe-area-inset-right, 0px));
-  --D: min(92cqh, 58cqw);
-  --R: calc(var(--D) / 2);
-  --shift: max(0px, calc((100cqw - var(--R) * 2.25 - 640px) / 2));
-  --cx: calc(var(--R) * 0.8 + var(--shift));
-  --cy: 50cqh;
-}
-@container (width < 760px) or (aspect-ratio < 1.15) {
-  .stage {
-    --D: min(108cqw, 52cqh, calc(100cqh - 370px));
-    --cx: min(calc(100cqw - var(--R) * 1.32), calc(50cqw - var(--R) * 0.2));
-    --cy: calc(var(--R) * 1.08 + 12px);
-  }
-}
-
-.deck > * { position: absolute; }
-
-/* The room has a light in it. A pool of the cover's colour sits under the record and comes up when the needle drops. */
+/* ---------- the room ---------- */
+/* Light from the cover pools under the deck, and comes up when the needle drops. */
 .stage::before {
   content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
   background: radial-gradient(circle at var(--cx) var(--cy),
-    color-mix(in oklab, var(--accent) 34%, transparent) 0,
-    color-mix(in oklab, var(--accent) 12%, transparent) calc(var(--R) * 1.35),
-    transparent calc(var(--R) * 2.6));
-  opacity: 0.45;
+    color-mix(in oklab, var(--accent) 30%, transparent) 0,
+    color-mix(in oklab, var(--accent) 10%, transparent) calc(var(--R) * 1.9),
+    transparent calc(var(--R) * 3.4));
+  opacity: 0.4;
   transition: opacity 1400ms var(--ease-out);
 }
 .app[data-playing='true'] .stage::before { opacity: 1; }
@@ -99,16 +94,73 @@ body {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(ellipse at 40% 50%, transparent 52%, rgba(0, 0, 0, 0.24));
+  background: radial-gradient(ellipse at 45% 50%, transparent 55%, rgba(0, 0, 0, 0.22));
 }
-/* Fine grain, so the flat colour feels printed rather than rendered. */
+/* Fine grain, so the flat colour reads as a surface rather than a screen. */
 .app::after {
   content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: 0.07;
+  opacity: 0.06;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 1.4 -.2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------- geometry ---------- */
+/* R is the record's radius; the whole deck is measured in it. The plinth is 2.95R wide and
+   2.37R deep plus a strip for the keys. (--px, --py) is its top-left corner and (--cx, --cy)
+   the spindle. The tonearm's maths in app.js assumes these proportions. */
+.stage {
+  position: absolute;
+  inset: 0;
+  --gutter-l: max(16px, env(safe-area-inset-left, 0px));
+  --gutter-r: max(16px, env(safe-area-inset-right, 0px));
+  --strip: 92px;
+  --gap: max(48px, 5cqw);
+  --R: min(calc((86cqh - var(--strip)) / 2.37), 17.5cqw);
+  --pw: calc(var(--R) * 2.95);
+  --ph: calc(var(--R) * 2.37 + var(--strip));
+  --px: max(var(--gutter-l), 5cqw, calc((100cqw - var(--pw) - var(--gap) - 600px) / 2));
+  --py: calc((100cqh - var(--ph)) / 2);
+  --cx: calc(var(--px) + var(--R) * 1.225);
+  --cy: calc(var(--py) + var(--R) * 1.185);
+}
+@container (width < 760px) or (aspect-ratio < 1.15) {
+  .stage {
+    --strip: 80px;
+    --R: min(calc((100cqw - var(--gutter-l) - var(--gutter-r)) / 2.95), calc((56cqh - var(--strip)) / 2.37));
+    --px: calc((100cqw - var(--pw)) / 2);
+    --py: max(16px, env(safe-area-inset-top, 0px));
+  }
+}
+
+.deck > * { position: absolute; }
+
+/* ---------- the deck ---------- */
+.plinth {
+  left: var(--px);
+  top: var(--py);
+  width: var(--pw);
+  height: var(--ph);
+  border-radius: calc(var(--R) * 0.075);
+  background: var(--body);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.4),
+    0 2px 3px rgba(0, 0, 0, 0.22),
+    0 calc(var(--R) * 0.07) calc(var(--R) * 0.32) rgba(0, 0, 0, 0.38);
+}
+/* The maker's name, cut into the plinth below the arm rest. */
+.mark {
+  left: calc(var(--cx) + var(--R) * 1.06);
+  top: calc(var(--cy) + var(--R) * 0.88);
+  font-size: max(11px, calc(var(--R) * 0.062));
+  font-weight: 640;
+  font-stretch: 125%;
+  letter-spacing: 0.01em;
+  color: var(--etch);
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .platter {
@@ -122,11 +174,8 @@ body {
     conic-gradient(from 200deg, #8d8d8a, #e6e6e2 10%, #a4a4a0 22%, #6c6c69 36%, #b6b6b2 50%, #efefeb 61%, #9a9a96 74%, #6f6f6c 88%, #8d8d8a);
   padding: calc(var(--R) * 0.045);
   box-sizing: border-box;
-  box-shadow:
-    0 calc(var(--R) * 0.05) calc(var(--R) * 0.24) rgba(0, 0, 0, 0.42),
-    0 0 0 calc(var(--R) * 0.016) color-mix(in oklab, var(--ink) 9%, var(--field));
+  box-shadow: 0 calc(var(--R) * 0.012) calc(var(--R) * 0.04) rgba(0, 0, 0, 0.5);
 }
-/* The strobe dots drift slowly now that the platter is turning at a calmer pace than true 33⅓. */
 .strobe {
   position: absolute;
   inset: 0;
@@ -157,7 +206,7 @@ body {
     radial-gradient(circle closest-side, transparent 0 96.4%, #161617 96.6% 99.1%, #2b2b2c 99.5%, transparent 100%),
     repeating-radial-gradient(circle closest-side, #121213 0 0.33%, #0b0b0c 0.33% 0.66%),
     var(--vinyl);
-  box-shadow: inset 0 0 0 calc(var(--R) * 0.006) rgba(255, 255, 255, 0.07), inset 0 calc(var(--R) * 0.012) calc(var(--R) * 0.03) rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 0 0 calc(var(--R) * 0.006) rgba(255, 255, 255, 0.07);
 }
 .spin { will-change: transform; }
 .label {
@@ -215,6 +264,35 @@ body {
   will-change: transform;
 }
 
+/* The strobe lamp at the front-left of the platter. It lights the rim while the motor runs,
+   the way a deck's strobe shows it is up to speed. */
+.lamp {
+  /* centred on the rim at the front-left, 225° round from the top */
+  left: calc(var(--cx) - var(--R) * 0.96);
+  top: calc(var(--cy) + var(--R) * 0.5);
+  width: calc(var(--R) * 0.46);
+  height: calc(var(--R) * 0.46);
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle closest-side, color-mix(in oklab, var(--lamp) 42%, transparent), color-mix(in oklab, var(--lamp) 10%, transparent) 60%, transparent);
+  opacity: 0;
+  transition: opacity 600ms ease;
+}
+.lamp::after {
+  /* the lamp housing, sitting on the plinth just off the platter */
+  content: '';
+  position: absolute;
+  left: 28%;
+  top: 56%;
+  width: 15%;
+  height: 15%;
+  border-radius: 50%;
+  background: #2a2a2c;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+.app[data-playing='true'] .lamp { opacity: 1; }
+.app[data-playing='true'] .lamp::after { background: var(--lamp); box-shadow: 0 0 calc(var(--R) * 0.03) var(--lamp); }
+
 .spindle {
   left: calc(var(--cx) - var(--R) * 0.019);
   top: calc(var(--cy) - var(--R) * 0.019);
@@ -236,84 +314,186 @@ body {
 .arm, .arm-shadow { will-change: transform; transform: rotate(-4deg); }
 .arm-shadow { opacity: 0.5; }
 
-/* ---------- the song ---------- */
-.panel {
+/* ---------- the keys ---------- */
+/* Start/stop, back and forward, then the volume fader, along the front of the plinth. */
+.strip {
   position: absolute;
-  left: calc(var(--cx) + var(--R) * 1.42);
-  right: max(var(--gutter-r), 4cqw);
-  top: 0;
-  bottom: 0;
-  max-width: 640px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 32px;
-  padding-block: 72px;
-  box-sizing: border-box;
-  min-width: 0;
-  container: panel / inline-size;
-}
-@container panel (width < 400px) {
-  .btn { min-width: 54px; padding: 0 14px; }
-  .btn.play { min-width: 76px; }
-  .knob { margin-left: 2px; }
-}
-@container (width < 760px) or (aspect-ratio < 1.15) {
-  .panel {
-    left: var(--gutter-l);
-    right: var(--gutter-r);
-    top: calc(var(--cy) + var(--R) * 1.06 + 8px);
-    max-width: none;
-    justify-content: flex-start;
-    gap: 18px;
-    overflow-y: auto;
-    padding-block: 12px max(16px, env(safe-area-inset-bottom, 0px));
-  }
-}
-
-.panel > * { animation: rise 900ms var(--ease-out) backwards; }
-.panel > :nth-child(2) { animation-delay: 70ms; }
-.panel > :nth-child(3) { animation-delay: 140ms; }
-.panel > :nth-child(4) { animation-delay: 210ms; }
-.panel > :nth-child(5) { animation-delay: 280ms; }
-@keyframes rise { from { opacity: 0; transform: translateY(18px); filter: blur(4px); } }
-
-.source {
-  margin: 0;
+  left: calc(var(--px) + var(--R) * 0.18);
+  width: calc(var(--pw) - var(--R) * 0.36);
+  top: calc(var(--py) + var(--R) * 2.37);
+  height: var(--strip);
   display: flex;
   align-items: center;
   gap: 10px;
-  align-self: flex-start;
-  padding: 7px 14px 7px 12px;
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--ink) 8%, var(--field));
-  box-shadow: inset 0 1px 0 color-mix(in oklab, var(--ink) 9%, transparent);
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--muted);
 }
-.source a { color: inherit; text-underline-offset: 3px; }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
-.app[data-mode='live'][data-playing='true'] .dot { background: var(--accent); animation: breathe 2.4s ease-in-out infinite; }
-@keyframes breathe { 50% { opacity: 0.35; } }
 
-.meta { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.key {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  flex: none;
+  height: 52px;
+  min-width: 56px;
+  padding: 0 16px;
+  border-radius: 10px;
+  background: var(--key);
+  color: var(--key-ink);
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.13),
+    0 1px 0 rgba(0, 0, 0, 0.45),
+    0 3px 6px rgba(0, 0, 0, 0.3);
+  transition: transform 150ms var(--ease-out), box-shadow 150ms var(--ease-out), background-color 200ms ease;
+}
+.key svg { width: 22px; height: 22px; fill: currentColor; grid-area: 1 / 1; }
+.key:not(:disabled):active {
+  transform: translateY(1px) scale(0.96);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+.key:disabled { opacity: 0.4; cursor: default; }
+.key.play {
+  min-width: 112px;
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    0 1px 0 rgba(0, 0, 0, 0.45),
+    0 3px 8px rgba(0, 0, 0, 0.32);
+}
+@media (hover: hover) and (pointer: fine) {
+  .key:hover:not(:disabled) { background: var(--key-hi); }
+  .key.play:hover:not(:disabled) { background: color-mix(in oklab, var(--accent) 88%, #fff); }
+}
+.key:focus-visible, .fader:focus-visible { outline: 2px solid var(--key-ink); outline-offset: 3px; }
+
+/* Play and pause share the key and cross-fade. Keyboard toggles switch instantly. */
+.icon { transition: opacity 300ms var(--ease-icon), transform 300ms var(--ease-icon), filter 300ms var(--ease-icon); }
+.i-pause, .app[data-playing='true'] .i-play { opacity: 0; transform: scale(0.25); filter: blur(4px); }
+.app[data-playing='true'] .i-pause { opacity: 1; transform: none; filter: none; }
+.app[data-instant] .icon { transition: none; }
+
+/* A long-throw fader, like the pitch control on a deck, laid on its side. */
+.fader {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 72px;
+  max-width: 240px;
+  height: 52px;
+  margin-left: auto;
+  border-radius: 10px;
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.groove {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 50%;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: #070708;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+.level {
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  opacity: 0.75;
+  transform-origin: left center;
+  transform: scaleX(0.64);
+}
+.cap {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 28px;
+  height: 38px;
+  margin-top: -19px;
+  border-radius: 5px;
+  background:
+    linear-gradient(90deg, transparent 45%, #26262a 45% 55%, transparent 55%),
+    repeating-linear-gradient(90deg, #d6d6d1 0 2px, #b4b4af 2px 4px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 2px 5px rgba(0, 0, 0, 0.5);
+  transition: scale 150ms var(--ease-out);
+}
+.fader.dragging .cap { scale: 0.96; }
+.vol {
+  flex: none;
+  min-width: 3ch;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: color-mix(in oklab, var(--key-ink) 60%, transparent);
+}
+
+/* ---------- the song ---------- */
+/* Top of the type lines up with the top of the plinth; the progress lines up with the keys. */
+.panel {
+  position: absolute;
+  left: calc(var(--px) + var(--pw) + var(--gap));
+  right: max(var(--gutter-r), 5cqw);
+  top: var(--py);
+  height: var(--ph);
+  max-width: 600px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 24px;
+  box-sizing: border-box;
+  min-width: 0;
+}
+@container (width < 760px) or (aspect-ratio < 1.15) {
+  .panel {
+    left: max(var(--gutter-l), var(--px));
+    right: max(var(--gutter-r), var(--px));
+    top: calc(var(--py) + var(--ph) + 28px);
+    height: auto;
+    bottom: 0;
+    max-width: none;
+    justify-content: flex-start;
+    gap: 22px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  }
+}
+
+.meta { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+/* Archivo's width axis carries the hierarchy: the title compressed, the artist stretched. */
 .title {
-  margin: 0 0 4px;
+  margin: 0 0 6px;
   font-size: 72px;
-  font-weight: 680;
-  font-stretch: 78%;
-  line-height: 0.94;
-  letter-spacing: -0.028em;
-  word-spacing: 0.05em;
+  font-weight: 720;
+  font-stretch: 72%;
+  line-height: 0.92;
+  letter-spacing: -0.03em;
   text-wrap: balance;
   overflow-wrap: anywhere;
 }
-.artist { margin: 0; font-size: 24px; font-weight: 560; line-height: 1.25; letter-spacing: -0.012em; }
-.album { margin: 0; font-size: 16px; line-height: 1.4; color: var(--muted); }
+.artist {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 540;
+  font-stretch: 118%;
+  line-height: 1.25;
+  letter-spacing: -0.005em;
+  text-wrap: pretty;
+}
+.album { margin: 0; font-size: 16px; line-height: 1.45; color: var(--muted); text-wrap: pretty; }
 .artist:empty, .album:empty, .credit:empty { display: none; }
 
-.progress { display: flex; flex-direction: column; gap: 6px; }
+.foot { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.progress { display: flex; flex-direction: column; gap: 8px; }
 .scrub {
   position: relative;
   height: 22px;
@@ -358,82 +538,26 @@ body {
 }
 .times span:first-child { color: var(--ink); }
 
-.controls {
+.source {
+  margin: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
-  align-self: flex-start;
-  padding: 6px;
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--ink) 7%, var(--field));
-  box-shadow: inset 0 1px 0 color-mix(in oklab, var(--ink) 10%, transparent);
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--muted);
 }
-.btn {
-  appearance: none;
-  border: 0;
-  margin: 0;
-  height: 52px;
-  min-width: 68px;
-  padding: 0 20px;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--ink);
-  display: inline-grid;
-  place-items: center;
-  cursor: pointer;
-  transition: transform 160ms var(--ease-out), background-color 200ms ease;
-}
-.btn svg { width: 22px; height: 22px; fill: currentColor; grid-area: 1 / 1; }
-.btn:active { transform: scale(0.96); }
-.btn:disabled { opacity: 0.4; cursor: default; transform: none; }
-.btn:focus-visible, .knob:focus-visible, .corner:focus-visible, .source a:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 3px;
-}
-.btn.play {
-  min-width: 104px;
-  background: var(--accent);
-  color: var(--on-accent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 8px 22px -8px color-mix(in oklab, var(--accent) 80%, transparent);
-}
-@media (hover: hover) and (pointer: fine) {
-  .btn:hover:not(:disabled) { background: var(--step-hi); }
-  .btn.play:hover { background: color-mix(in oklab, var(--accent) 88%, var(--ink)); }
-}
-.icon { transition: opacity 160ms ease, transform 160ms var(--ease-out), filter 160ms ease; }
-.i-pause, .app[data-playing='true'] .i-play { opacity: 0; transform: scale(0.75); filter: blur(2px); }
-.app[data-playing='true'] .i-pause { opacity: 1; transform: none; filter: none; }
-.app[data-instant] .icon { transition: none; }
+.source a { color: var(--ink); text-underline-offset: 3px; text-decoration-color: color-mix(in oklab, var(--ink) 40%, transparent); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+.app[data-mode='live'][data-playing='true'] .dot { background: var(--accent); }
 
-.knob {
-  position: relative;
-  flex: none;
-  width: 52px;
-  height: 52px;
-  margin-left: 4px;
-  border-radius: 50%;
-  background: transparent;
-  display: grid;
-  place-items: center;
-  cursor: ns-resize;
-  touch-action: none;
-  font-size: 13px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  user-select: none;
-  -webkit-user-select: none;
-  transition: transform 160ms var(--ease-out);
-}
-.knob:active { transform: scale(0.96); }
-.knob svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(135deg); }
-.knob circle { fill: none; stroke-width: 3; stroke-linecap: round; }
-.knob-track { stroke: var(--step-hi); stroke-dasharray: 94.25 125.66; }
-.knob-level { stroke: var(--ink); stroke-dasharray: 60 125.66; }
-
-.credit { margin: 0; max-width: 44ch; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.credit { margin: 0; max-width: 48ch; font-size: 13px; line-height: 1.45; color: var(--muted); }
 .credit a { color: inherit; text-underline-offset: 3px; }
 .nowrap { white-space: nowrap; }
+.source a:focus-visible, .credit a:focus-visible, .corner:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; border-radius: 2px; }
 
+/* ---------- chrome ---------- */
 .corner {
   position: absolute;
   top: calc(16px + env(safe-area-inset-top, 0px));
@@ -447,17 +571,21 @@ body {
   display: grid;
   place-items: center;
   cursor: pointer;
-  transition: opacity 400ms ease, transform 160ms var(--ease-out);
+  touch-action: manipulation;
+  transition: opacity 400ms ease, transform 150ms var(--ease-out);
 }
 .corner svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; grid-area: 1 / 1; }
 .corner .i-exit, .app[data-full] .corner .i-enter { display: none; }
 .app[data-full] .corner .i-exit { display: block; }
-.corner:active { transform: scale(0.94); }
+.corner:active { transform: scale(0.96); }
+@media (hover: hover) and (pointer: fine) {
+  .corner:hover { background: var(--step-hi); }
+}
 
 .keys {
   position: absolute;
   right: var(--gutter-r);
-  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   margin: 0;
   font-size: 13px;
   color: var(--muted);
@@ -473,7 +601,7 @@ body {
   padding: 2px 6px;
   border-radius: 6px;
   background: var(--step);
-  box-shadow: 0 1px 0 color-mix(in oklab, var(--ink) 24%, var(--field));
+  box-shadow: 0 1px 0 color-mix(in oklab, var(--ink) 22%, var(--field));
   color: var(--ink);
   text-align: center;
   box-sizing: border-box;
@@ -481,20 +609,26 @@ body {
 .keys span { display: inline-flex; align-items: center; gap: 6px; }
 .keys kbd + kbd { margin-left: -2px; }
 @media not ((hover: hover) and (pointer: fine)) { .keys { display: none; } }
-@container (width < 760px) or (aspect-ratio < 1.15) { .keys { display: none; } }
+@container (width < 1100px) or (height < 640px) or (aspect-ratio < 1.15) { .keys { display: none; } }
 
 .app[data-idle] { cursor: none; }
 .app[data-idle] .corner, .app[data-idle] .keys { opacity: 0; }
 
 @container (width < 760px) or (aspect-ratio < 1.15) {
-  .title { font-size: 40px; }
-  .artist { font-size: clamp(18px, 3cqw, 26px); }
-  .album { font-size: clamp(15px, 2.2cqw, 19px); }
-  .controls { gap: 6px; align-self: stretch; }
-  .btn { flex: 1; min-width: 0; height: clamp(48px, 7cqw, 60px); }
-  .knob { flex: none; }
-  .btn.play { flex: 1.4; }
+  .title { font-size: 44px; }
+  .artist { font-size: clamp(17px, 3cqw, 24px); }
+  .album { font-size: clamp(15px, 2.2cqw, 18px); }
+  .strip { gap: 8px; }
+  .key { height: 48px; min-width: 48px; padding: 0 10px; }
+  .key.play { min-width: 76px; }
+  .fader { height: 48px; }
   .corner { display: none; }
+}
+@container (width < 480px) {
+  .vol { display: none; }
+}
+@container (width < 360px) {
+  .key.play { min-width: 64px; }
 }
 @container (width < 760px) and (height < 760px) {
   .credit { display: none; }
@@ -502,7 +636,6 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   :root { --repaint: 300ms; }
-  .panel > * { animation: none; }
   .stage::before { transition-duration: 300ms; }
-  .app[data-mode='live'][data-playing='true'] .dot { animation: none; }
+  .i-pause, .app[data-playing='true'] .i-play { transform: none; filter: none; }
 }

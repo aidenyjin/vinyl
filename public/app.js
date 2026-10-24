@@ -41,7 +41,7 @@
     sourceText: $('sourceText'), title: $('title'), artist: $('artist'), album: $('album'), credit: $('credit'),
     scrub: $('scrub'), fill: $('fill'), thumb: $('thumb'), elapsed: $('elapsed'), remaining: $('remaining'),
     prev: $('prev'), play: $('play'), next: $('next'),
-    knob: $('knob'), knobLevel: $('knobLevel'), knobValue: $('knobValue'), full: $('fullscreen'),
+    knob: $('knob'), knobLevel: $('knobLevel'), knobCap: $('knobCap'), knobValue: $('knobValue'), full: $('fullscreen'),
   };
 
   // ---------- what is playing ----------
@@ -76,7 +76,7 @@
     sheen: 0, sheenV: 0, sheenTarget: 0,
     seated: false,
   };
-  const geom = { R: 300, scrubW: 300 };
+  const geom = { R: 300, scrubW: 300, faderW: 160 };
   let shown = null;         // the record on the platter
   let pending = null;       // the record waiting to go on
   let swapping = false;
@@ -350,6 +350,12 @@
     el.artist.textContent = t.artist || '';
     el.album.textContent = t.album || '';
     el.credit.replaceChildren();
+    const source = () => {
+      const s = document.createElement('span');
+      s.className = 'nowrap';
+      s.textContent = 'The Met, public domain.';
+      return s;
+    };
     if (t.credit) {
       el.credit.append('Cover: ');
       const a = document.createElement('a');
@@ -361,33 +367,38 @@
         date.className = 'nowrap';
         date.textContent = m[2];
         a.append(m[1], date);
-        el.credit.append(a, m[3] || '', m[3] && /\.$/.test(m[3]) ? ' The Met, public domain.' : '. The Met, public domain.');
+        el.credit.append(a, m[3] || '', m[3] && /\.$/.test(m[3]) ? ' ' : '. ', source());
       } else {
         a.textContent = t.credit;
-        el.credit.append(a, '. The Met, public domain.');
+        el.credit.append(a, '. ', source());
       }
     }
     document.title = isSong(t) ? `${t.title} · ${t.artist || 'Vinyl'}` : 'Vinyl';
     fitTitle();
   }
 
-  // Largest size that keeps the title to two lines.
+  // Largest size that keeps the title to two lines without splitting a word.
+  // Words are measured unbroken; only a word too long even at the smallest size may break.
   function fitTitle() {
     const t = el.title, w = t.clientWidth;
     if (!w) return;
     const narrow = el.app.clientWidth < 760 || el.app.clientWidth / el.app.clientHeight < 1.15;
-    const max = narrow ? Math.min(76, w / 6.5) : clamp(w / 5.4, 40, 112);
-    const min = narrow ? 26 : 30;
+    const max = narrow ? Math.min(96, w / 3.6) : clamp(w / 3.3, 44, 168);
+    const min = narrow ? 28 : 34;
     const lines = () => Math.round(t.getBoundingClientRect().height / parseFloat(getComputedStyle(t).lineHeight));
+    const fits = () => lines() <= 2 && t.scrollWidth <= t.clientWidth;
+    t.style.overflowWrap = 'normal';
     t.style.fontSize = `${max}px`;
-    if (lines() <= 2) return;
-    let lo = min, hi = max;
-    for (let i = 0; i < 9; i++) {
-      const mid = (lo + hi) / 2;
-      t.style.fontSize = `${mid}px`;
-      if (lines() <= 2) lo = mid; else hi = mid;
+    if (!fits()) {
+      let lo = min, hi = max;
+      for (let i = 0; i < 9; i++) {
+        const mid = (lo + hi) / 2;
+        t.style.fontSize = `${mid}px`;
+        if (fits()) lo = mid; else hi = mid;
+      }
+      t.style.fontSize = `${lo * 0.98}px`; // a hair under, so sub-pixel rounding never splits a word
     }
-    t.style.fontSize = `${lo}px`;
+    t.style.overflowWrap = '';
   }
 
   function want(track) {
@@ -476,7 +487,8 @@
 
   function renderVolume() {
     const v = Math.round(model.volume);
-    el.knobLevel.style.strokeDasharray = `${(94.25 * v) / 100} 125.66`;
+    el.knobLevel.style.transform = `scaleX(${v / 100})`;
+    el.knobCap.style.transform = `translateX(${((v / 100) * geom.faderW).toFixed(1)}px)`;
     el.knobValue.textContent = String(v);
     el.knob.setAttribute('aria-valuenow', String(v));
   }
@@ -618,7 +630,7 @@
     act('seek', e.key === 'Home' ? 0 : e.key === 'End' ? Math.max(0, d - 1) : positionNow() + step);
   });
 
-  // The volume knob: drag up or down, scroll, or use the arrow keys.
+  // The volume fader: drag the cap, tap the groove, scroll, or use the arrow keys.
   let knobDrag = null, volumeTimer = 0;
   function setVolume(v) {
     model.volume = clamp(Math.round(v), 0, 100);
@@ -628,15 +640,26 @@
   }
   el.knob.addEventListener('pointerdown', (e) => {
     el.knob.setPointerCapture(e.pointerId);
-    knobDrag = { y: e.clientY, v: model.volume };
+    el.knob.classList.add('dragging');
+    // Grabbing the cap keeps it under the finger where you took hold; anywhere else on the groove jumps there first.
+    const cap = el.knobCap.getBoundingClientRect();
+    if (e.clientX < cap.left || e.clientX > cap.right) {
+      const left = el.knob.getBoundingClientRect().left;
+      setVolume(((e.clientX - left - cap.width / 2) / geom.faderW) * 100);
+    }
+    knobDrag = { x: e.clientX, v: model.volume };
   });
   el.knob.addEventListener('pointermove', (e) => {
-    if (knobDrag) setVolume(knobDrag.v + (knobDrag.y - e.clientY) * 0.5);
+    if (knobDrag) setVolume(knobDrag.v + ((e.clientX - knobDrag.x) / geom.faderW) * 100);
   });
-  const endKnob = () => { knobDrag = null; };
+  const endKnob = () => { knobDrag = null; el.knob.classList.remove('dragging'); };
   el.knob.addEventListener('pointerup', endKnob);
   el.knob.addEventListener('pointercancel', endKnob);
-  el.knob.addEventListener('wheel', (e) => { e.preventDefault(); setVolume(model.volume - e.deltaY * 0.06); }, { passive: false });
+  el.knob.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : -e.deltaY;
+    setVolume(model.volume + d * 0.06);
+  }, { passive: false });
   el.knob.addEventListener('keydown', (e) => {
     const step = { ArrowUp: 2, ArrowRight: 2, ArrowDown: -2, ArrowLeft: -2, PageUp: 10, PageDown: -10 }[e.key];
     if (step == null && e.key !== 'Home' && e.key !== 'End') return;
@@ -708,6 +731,8 @@
   function measure() {
     geom.R = el.record.offsetWidth / 2 || geom.R;
     geom.scrubW = el.scrub.clientWidth || geom.scrubW;
+    geom.faderW = Math.max(0, el.knob.clientWidth - el.knobCap.offsetWidth) || geom.faderW;
+    renderVolume();
     fitTitle();
     renderProgress();
   }

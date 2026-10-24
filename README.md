@@ -34,7 +34,7 @@ In Safari, open <http://localhost:4747> and choose **File → Add to Dock**. Vin
 | ↑ ↓ | Volume |
 | F | Full screen. The screen stays awake while it's full screen. |
 
-You can also drag the volume knob up or down, or scroll on it.
+The keys and the volume fader on the front of the deck work with a mouse or a finger. Drag the fader, click anywhere along it, or scroll on it.
 
 ### Options
 
