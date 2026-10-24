@@ -1,0 +1,16 @@
+{
+  "name": "vinyl",
+  "version": "0.1.0",
+  "description": "A turntable that shows what your Mac is playing in Apple Music or Spotify.",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "vinyl": "server.js"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
