@@ -1,212 +1,133 @@
-@font-face {
-  font-family: 'Archivo';
-  src: url(fonts/archivo-latin.woff2) format('woff2');
-  font-weight: 100 900;
-  font-stretch: 62% 125%;
-  font-display: swap;
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'Archivo';
-  src: url(fonts/archivo-latin-ext.woff2) format('woff2');
-  font-weight: 100 900;
-  font-stretch: 62% 125%;
-  font-display: swap;
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
-}
+/* Vinyl. A record half inside its sleeve, on paper washed with the cover's colour.
+   Play slides the record out and swings the arm in; pause tucks it back away.
+   Every size on the deck is measured in R, the record's radius, set on .stage. */
 
-/* The colours are registered so a new cover can repaint the room smoothly. */
-@property --field { syntax: '<color>'; inherits: true; initial-value: #1c221f; }
-@property --ink { syntax: '<color>'; inherits: true; initial-value: #eef1ec; }
-@property --accent { syntax: '<color>'; inherits: true; initial-value: #d8c46c; }
-@property --on-accent { syntax: '<color>'; inherits: true; initial-value: #1c221f; }
-@property --c1 { syntax: '<color>'; inherits: true; initial-value: #2f5d4f; }
-@property --c2 { syntax: '<color>'; inherits: true; initial-value: #5e5428; }
-@property --c3 { syntax: '<color>'; inherits: true; initial-value: #26453f; }
-
-/* A record seen from above, resting on a room of moving colour taken from its cover.
-   Everything on the deck is flat and quiet; the colour and the turning record do the work. */
-:root {
-  --field: #1c221f;       /* the room, flattened from the cover's main colour */
-  --ink: #eef1ec;         /* text and controls, light or dark against the field */
-  --accent: #d8c46c;      /* the cover's strongest colour, on the play button only */
-  --on-accent: #1c221f;
-  --c1: #2f5d4f;          /* three colour fields from the cover that drift behind everything */
-  --c2: #5e5428;
-  --c3: #26453f;
-  --muted: color-mix(in oklab, var(--ink) 66%, var(--field));
-  --veil: color-mix(in oklab, var(--ink) 12%, transparent);
-  --veil-hi: color-mix(in oklab, var(--ink) 20%, transparent);
-  --line: color-mix(in oklab, var(--ink) 24%, transparent);
-
-  --vinyl: #111112;
-  --arm: #f1f0eb;
-  --arm-dim: #d6d5cf;
-
-  --font: 'Archivo', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
-  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
-  --ease-icon: cubic-bezier(0.2, 0, 0, 1);
-  --repaint: 1200ms;
-
-  color-scheme: dark;
-  transition:
-    --field var(--repaint) ease, --ink var(--repaint) ease, --accent var(--repaint) ease, --on-accent var(--repaint) ease,
-    --c1 var(--repaint) ease, --c2 var(--repaint) ease, --c3 var(--repaint) ease;
-}
-
-html {
-  height: 100%;
-  -webkit-tap-highlight-color: transparent;
-  -webkit-text-size-adjust: 100%;
-  overscroll-behavior: none;
-}
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
 body {
-  height: 100%;
-  margin: 0;
-  background: var(--field);
-  color: var(--ink);
-  font-family: var(--font);
-  font-size: 16px;
+  background: #efece6;
   overflow: hidden;
   overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
 }
-::selection { background: var(--accent); color: var(--on-accent); }
 
-/* The app carries its own background: in full screen it is the top layer, and anything
-   transparent would show the browser's black backdrop instead of the room. */
-.app { position: relative; height: 100%; height: 100dvh; overflow: hidden; container-type: size; background: var(--field); }
-.app::backdrop { background: var(--field); }
+/* The app carries its own background: in full screen it is the top layer. */
+.app {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  container-type: size;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--room);
+  --room: #efece6;                      /* paper */
+  --ink: #1d1c1a;                       /* text in three strengths */
+  --ink-2: rgba(29, 28, 26, 0.6);
+  --ink-3: rgba(29, 28, 26, 0.44);
+  --track: rgba(29, 28, 26, 0.14);
+  --hover: rgba(29, 28, 26, 0.07);
+  --shadow: 40, 30, 20;                 /* warm shadow, as on paper */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-icon: cubic-bezier(0.2, 0, 0, 1);
+}
+.app::backdrop { background: #efece6; }
+.app ::selection { background: var(--ink); color: var(--room); }
 
-/* ---------- the room ---------- */
-/* Three soft fields of the cover's colours. They drift only while the record turns,
-   and hold still when it stops. Transform only, so the compositor does the work. */
-.aura { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-.blob {
+/* ---------- the light ---------- */
+/* The cover, washed into paper: two copies, one turning each way, only while music plays. */
+.ambient { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.amb-slot { position: absolute; inset: 0; }
+.amb-layer {
   position: absolute;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  will-change: transform;
-  animation: 34s ease-in-out infinite alternate;
+  left: 50%;
+  top: 50%;
+  width: 160cqmax;
+  height: 160cqmax;
+  margin: -80cqmax 0 0 -80cqmax;
+  animation: amb-turn 150s linear infinite;
   animation-play-state: paused;
+  will-change: transform;
 }
-.b1 {
-  width: 95cqmax;
-  left: -32cqmax;
-  top: -42cqmax;
-  background: radial-gradient(circle closest-side, var(--c1), color-mix(in oklab, var(--c1) 45%, transparent) 55%, transparent);
-  animation-name: drift-1;
+.amb-layer.l2 {
+  width: 125cqmax;
+  height: 125cqmax;
+  margin: -62.5cqmax 0 0 -62.5cqmax;
+  opacity: 0.6;
+  animation-duration: 110s;
+  animation-direction: reverse;
 }
-.b2 {
-  width: 85cqmax;
-  right: -30cqmax;
-  bottom: -40cqmax;
-  background: radial-gradient(circle closest-side, var(--c2), color-mix(in oklab, var(--c2) 45%, transparent) 55%, transparent);
-  animation-name: drift-2;
-  animation-duration: 41s;
-}
-.b3 {
-  width: 70cqmax;
-  left: 22cqw;
-  top: 8cqh;
-  background: radial-gradient(circle closest-side, var(--c3), color-mix(in oklab, var(--c3) 40%, transparent) 55%, transparent);
-  opacity: 0.8;
-  animation-name: drift-3;
-  animation-duration: 47s;
-}
-.app[data-playing='true'] .blob { animation-play-state: running; }
-@keyframes drift-1 { to { transform: translate(26cqw, 30cqh) scale(1.18); } }
-@keyframes drift-2 { to { transform: translate(-30cqw, -18cqh) scale(0.86); } }
-@keyframes drift-3 { to { transform: translate(-28cqw, 22cqh) scale(1.24); } }
-
-/* Fine grain keeps the soft colour from banding. */
+.app[data-playing='true'] .amb-layer { animation-play-state: running; }
+@keyframes amb-turn { to { transform: rotate(360deg); } }
+/* Fine grain keeps the soft light from banding. */
 .app::after {
   content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: 0.05;
+  opacity: 0.045;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 1.4 -.2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 /* ---------- geometry ---------- */
-/* R is the record's radius; the deck is measured in it. Its box is 2.95R wide (record and arm)
-   and 2.37R deep. (--px, --py) is that box's top-left corner and (--cx, --cy) the spindle.
-   The tonearm's maths in app.js assumes these proportions. */
+/* The sleeve (S = 2.12R) on the left, the record's centre near its right edge, the arm beyond:
+   3.79R wide in all. (--cx, --cy) is the spindle when the record is out. */
 .stage {
   position: absolute;
   inset: 0;
-  --gutter-l: max(16px, env(safe-area-inset-left, 0px));
-  --gutter-r: max(16px, env(safe-area-inset-right, 0px));
-  --gap: max(40px, 4cqw);
-  --R: min(calc(80cqh / 2.37), 18cqw);
-  --pw: calc(var(--R) * 2.95);
-  --ph: calc(var(--R) * 2.37);
-  --px: max(var(--gutter-l), 4cqw, calc((100cqw - var(--pw) - var(--gap) - 560px) / 2));
-  --py: calc((100cqh - var(--ph)) / 2);
-  --cx: calc(var(--px) + var(--R) * 1.225);
-  --cy: calc(var(--py) + var(--R) * 1.185);
+  --g: max(24px, 5cqw, env(safe-area-inset-left, 0px));
+  --R: min(calc((100cqh - 400px) / 2.12), calc((100cqw - 2 * var(--g)) / 3.79));
+  --S: calc(var(--R) * 2.12);
+  --left: calc((100cqw - var(--R) * 3.79) / 2);
+  --top: max(80px, calc((100cqh - var(--S) - 290px) / 2));
+  --cx: calc(var(--left) + var(--R) * 2.47);
+  --cy: calc(var(--top) + var(--S) / 2);
 }
-@container (width < 760px) or (aspect-ratio < 1.15) {
+/* On a phone the sleeve keeps its size and the arm runs off the edge. */
+@container (width < 700px) {
   .stage {
-    --R: min(calc((100cqw - var(--gutter-l) - var(--gutter-r)) / 2.95), calc(48cqh / 2.37));
-    --px: calc((100cqw - var(--pw)) / 2);
-    --py: max(12px, env(safe-area-inset-top, 0px));
+    --g: 16px;
+    --R: min(calc((100cqw - 16px) / 3.1), calc((100cqh - 420px) / 2.12));
+    --left: 16px;
   }
 }
 
-.deck > * { position: absolute; }
 .deck { pointer-events: none; }
+.deck > *, .retract > * { position: absolute; }
 
-/* ---------- the record ---------- */
-/* A shallow shadow where the platter would be: the record rests on the room itself. */
-.mat {
-  left: calc(var(--cx) - var(--R) * 1.06);
-  top: calc(var(--cy) - var(--R) * 1.06);
-  width: calc(var(--R) * 2.12);
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.1);
+/* Back into the sleeve once the arm has lifted away; out at once when you press play.
+   The arm swings in after the record has landed (armDelay in app.js). */
+.retract {
+  inset: 0;
+  transform: translateX(calc(var(--R) * -0.88));
+  transition: transform 700ms var(--ease-in-out) 160ms;
 }
+.app[data-playing='true'] .retract { transform: none; transition-delay: 0ms; }
 
-.record {
-  left: calc(var(--cx) - var(--R));
-  top: calc(var(--cy) - var(--R));
-  width: calc(var(--R) * 2);
+/* ---------- the sleeve ---------- */
+.sleeve {
+  left: var(--left);
+  top: var(--top);
+  width: var(--S);
   aspect-ratio: 1;
-  border-radius: 50%;
-  box-shadow: 0 calc(var(--R) * 0.03) calc(var(--R) * 0.12) rgba(0, 0, 0, 0.32);
-  will-change: transform;
-  pointer-events: auto;
-  cursor: pointer;
-  -webkit-user-select: none;
-  user-select: none;
-  touch-action: manipulation;
-  transition: scale 150ms var(--ease-out);
-}
-/* Pressing the record is how you stop it; `scale` composes with the swap's transform. */
-.record:active { scale: 0.985; }
-.record > * { position: absolute; inset: 0; border-radius: 50%; }
-/* Plain black, three faint bands between the tracks, and a hairline of light at the edge. */
-.vinyl {
-  background:
-    radial-gradient(circle closest-side, transparent 0 63.6%, rgba(255, 255, 255, 0.04) 64% 64.6%, transparent 65%),
-    radial-gradient(circle closest-side, transparent 0 75.6%, rgba(255, 255, 255, 0.04) 76% 76.6%, transparent 77%),
-    radial-gradient(circle closest-side, transparent 0 87.6%, rgba(255, 255, 255, 0.04) 88% 88.6%, transparent 89%),
-    repeating-radial-gradient(circle closest-side, #121213 0 0.45%, #0f0f10 0.45% 0.9%),
-    var(--vinyl);
-  box-shadow: inset 0 0 0 calc(var(--R) * 0.005) rgba(255, 255, 255, 0.09);
-}
-.spin { will-change: transform; }
-.label {
-  position: absolute;
-  inset: 30%;
-  border-radius: 50%;
+  border-radius: 3px;
   overflow: hidden;
-  background: var(--accent);
+  background: #d8d3c9;
+  box-shadow:
+    0 1px 2px rgba(var(--shadow), 0.14),
+    0 calc(var(--R) * 0.1) calc(var(--R) * 0.22) calc(var(--R) * -0.06) rgba(var(--shadow), 0.32);
 }
-.label img {
+/* Years in a crate leave a ring where the record pressed against the card. */
+.sleeve::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, transparent 0 45.4%, rgba(255, 255, 255, 0.09) 46% 46.8%, transparent 47.6%);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+.label img, .sleeve img {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -214,58 +135,101 @@ body {
   object-fit: cover;
   display: block;
 }
-/* The spindle hole. */
+
+/* ---------- the record ---------- */
+.record {
+  left: calc(var(--cx) - var(--R));
+  top: calc(var(--cy) - var(--R));
+  width: calc(var(--R) * 2);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  pointer-events: auto;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  box-shadow:
+    0 1px 2px rgba(var(--shadow), 0.25),
+    0 calc(var(--R) * 0.04) calc(var(--R) * 0.14) rgba(var(--shadow), 0.28);
+  transition: scale 150ms var(--ease-out);
+  will-change: transform;
+}
+/* Pressing the record stops it. `scale` composes with the swap's transform. */
+.record:active { scale: 0.985; }
+.record > * { position: absolute; inset: 0; border-radius: 50%; }
+
+/* Black and grooved, with smooth dead wax by the label, three quiet gaps between tracks
+   and a lifted lip at the edge. */
+.vinyl {
+  background:
+    radial-gradient(circle closest-side, #0c0c0d 0 35%, transparent 35.4%),
+    radial-gradient(circle closest-side, transparent 0 97.4%, #1e1e21 97.9% 99.1%, #0b0b0c 99.6%),
+    radial-gradient(circle closest-side, transparent 0 55.4%, rgba(255, 255, 255, 0.035) 55.8% 56.4%, transparent 56.8%),
+    radial-gradient(circle closest-side, transparent 0 68.4%, rgba(255, 255, 255, 0.035) 68.8% 69.4%, transparent 69.8%),
+    radial-gradient(circle closest-side, transparent 0 81.4%, rgba(255, 255, 255, 0.035) 81.8% 82.4%, transparent 82.8%),
+    repeating-radial-gradient(circle closest-side, #131315 0 1.1%, #111113 1.1% 2.2%),
+    #111113;
+  box-shadow: inset 0 0 0 calc(var(--R) * 0.004) rgba(255, 255, 255, 0.07);
+}
+.spin { will-change: transform; }
+.label {
+  position: absolute;
+  inset: 32.5%;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #2a2b2f;
+}
+/* The spindle hole and the faint edge where paper meets vinyl. */
 .label::after {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: radial-gradient(circle closest-side, #0b0b0c 0 5%, transparent 5.6%);
+  background: radial-gradient(circle closest-side, #0b0b0c 0 4.6%, rgba(0, 0, 0, 0.25) 5.4%, transparent 6.6% 92%, rgba(0, 0, 0, 0.22) 100%);
 }
 .blank {
   position: absolute;
   inset: 0;
   display: grid;
-  place-items: start center;
-  padding-top: 24%;
-  color: var(--on-accent);
-  font-size: calc(var(--R) * 0.07);
+  place-items: center;
+  padding-bottom: 38%;
+  font-size: calc(var(--R) * 0.055);
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.45);
 }
-.label.has-art .blank { visibility: hidden; }
+.label.has-art .blank { display: none; }
 
-/* One soft band of light across the grooves; it leans toward the pointer. */
+/* Light catches the grooves in two soft bands; they lean toward the pointer. */
 .sheen {
   background: conic-gradient(
     transparent 0deg,
-    rgba(255, 255, 255, 0.06) 24deg,
-    rgba(255, 255, 255, 0.1) 36deg,
-    rgba(255, 255, 255, 0.06) 48deg,
-    transparent 72deg 180deg,
-    rgba(255, 255, 255, 0.04) 204deg,
-    rgba(255, 255, 255, 0.07) 216deg,
-    rgba(255, 255, 255, 0.04) 228deg,
-    transparent 252deg
+    rgba(255, 255, 255, 0.05) 22deg,
+    rgba(255, 255, 255, 0.09) 34deg,
+    rgba(255, 255, 255, 0.05) 46deg,
+    transparent 70deg 180deg,
+    rgba(255, 255, 255, 0.035) 202deg,
+    rgba(255, 255, 255, 0.065) 214deg,
+    rgba(255, 255, 255, 0.035) 226deg,
+    transparent 250deg
   );
-  -webkit-mask: radial-gradient(circle closest-side, transparent 0 60.4%, #000 61.4% 99%, transparent 99.6%);
-  mask: radial-gradient(circle closest-side, transparent 0 60.4%, #000 61.4% 99%, transparent 99.6%);
+  -webkit-mask: radial-gradient(circle closest-side, transparent 0 35.4%, #000 36.4% 98.8%, transparent 99.4%);
+  mask: radial-gradient(circle closest-side, transparent 0 35.4%, #000 36.4% 98.8%, transparent 99.4%);
   transform: rotate(-40deg);
   will-change: transform;
 }
 
 .spindle {
-  left: calc(var(--cx) - var(--R) * 0.016);
-  top: calc(var(--cy) - var(--R) * 0.016);
-  width: calc(var(--R) * 0.032);
+  left: calc(var(--cx) - var(--R) * 0.017);
+  top: calc(var(--cy) - var(--R) * 0.017);
+  width: calc(var(--R) * 0.034);
   aspect-ratio: 1;
   border-radius: 50%;
-  background: var(--arm-dim);
+  background: radial-gradient(circle at 36% 32%, #fbfbfb, #b7b8bb 50%, #6c6d71);
 }
 
 /* ---------- the tonearm ---------- */
-/* One line, a round pivot, a capsule of counterweight and a small head. Flat ivory.
-   The arm's box runs from the counterweight to the head; the pivot sits at 50% 16.67%. */
+/* The arm's box runs from the counterweight to the head; the pivot sits at 50% 16.67%. */
 .arm, .arm-shadow, .arm-base {
   left: calc(var(--cx) + var(--R) * 0.92);
   top: calc(var(--cy) - var(--R) * 1.08);
@@ -275,119 +239,57 @@ body {
   transform-origin: 50% 16.6667%;
 }
 .arm, .arm-shadow { will-change: transform; transform: rotate(-4deg); }
-.arm-shadow { opacity: 0.5; }
-.arm .tube, .arm .pivot, .arm .head, .arm .lift { fill: var(--arm); }
-.arm .weight { fill: var(--arm-dim); }
-.arm .pin { fill: #9d9c96; }
-.arm-base .base { fill: rgba(0, 0, 0, 0.1); }
-/* In light rooms the ivory arm keeps its edge with a hairline. */
-:root[data-light='true'] .arm :is(.tube, .pivot, .head, .weight, .lift) { stroke: rgba(0, 0, 0, 0.16); stroke-width: 0.5; }
-.arm-base .rest { fill: rgba(0, 0, 0, 0.12); }
+.arm-base .plate { fill: rgba(0, 0, 0, 0.05); stroke: rgba(0, 0, 0, 0.1); stroke-width: 0.5; }
+/* A hairline keeps the pale metal's edge against paper. */
+.arm :is(rect, circle) { stroke: rgba(0, 0, 0, 0.12); stroke-width: 0.4; }
 
-/* ---------- the song ---------- */
-/* Beside the record on wide screens: the title at the top of the deck, the controls at its foot. */
+/* ---------- words and controls ---------- */
+/* Under the sleeve: title and transport on one line, then the progress, then volume. */
 .panel {
   position: absolute;
-  left: calc(var(--px) + var(--pw) + var(--gap));
-  right: max(var(--gutter-r), 5cqw);
-  top: var(--py);
-  height: var(--ph);
-  max-width: 560px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 28px;
-  min-width: 0;
+  left: var(--left);
+  top: calc(var(--top) + var(--S) + 36px);
+  width: calc(var(--R) * 3.79);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 32px;
+  row-gap: 14px;
 }
-@container (width < 760px) or (aspect-ratio < 1.15) {
-  .panel {
-    left: max(var(--gutter-l), var(--px));
-    right: max(var(--gutter-r), var(--px));
-    top: calc(var(--py) + var(--ph) + 20px);
-    height: auto;
-    bottom: 0;
-    max-width: none;
-    justify-content: flex-start;
-    gap: 22px;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
-  }
+@container (width < 700px) {
+  .panel { left: 20px; width: calc(100cqw - 40px); grid-template-columns: 1fr; }
 }
 
-.meta { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.meta { min-width: 0; }
 .title {
-  margin: 0 0 6px;
-  font-size: 72px;
-  font-weight: 640;
-  font-stretch: 82%;
-  line-height: 0.94;
-  letter-spacing: -0.032em;
+  margin: 0;
+  font-family: ui-serif, 'New York', 'Iowan Old Style', Georgia, serif;
+  font-weight: 400;
+  font-size: clamp(26px, 3cqw, 38px);
+  letter-spacing: -0.01em;
+  line-height: 1.1;
   text-wrap: balance;
-  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
-.artist { margin: 0; font-size: 21px; font-weight: 500; line-height: 1.3; letter-spacing: -0.01em; text-wrap: pretty; }
-.album { margin: 0; font-size: 16px; line-height: 1.45; color: var(--muted); text-wrap: pretty; }
-.artist:empty, .album:empty, .credit:empty { display: none; }
+.sub {
+  margin: 6px 0 0;
+  font-size: 15px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.title:empty, .sub:empty { display: none; }
 
-.foot { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-.progress { display: flex; flex-direction: column; gap: 8px; }
-.scrub {
+.transport { display: flex; align-items: center; justify-content: center; gap: 4px; }
+.tbtn {
   position: relative;
-  height: 22px;
-  cursor: pointer;
-  touch-action: none;
-  outline: none;
-}
-.scrub .track, .scrub .fill {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 10px;
-  height: 3px;
-  border-radius: 2px;
-}
-.scrub .track { background: var(--line); }
-.scrub .fill { background: var(--ink); transform-origin: left center; transform: scaleX(0); }
-/* The line thickens under the pointer and while held: `scale` composes with the fill's scaleX. */
-.scrub .track, .scrub .fill { transition: scale 150ms var(--ease-out); }
-.scrub.dragging .track, .scrub.dragging .fill { scale: 1 1.7; }
-@media (hover: hover) and (pointer: fine) {
-  .scrub:hover .track, .scrub:hover .fill { scale: 1 1.7; }
-}
-.scrub .thumb {
-  position: absolute;
-  left: -6px;
-  top: 5px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--ink);
-  opacity: 0;
-  scale: 0.5;
-  transition: opacity 150ms ease, scale 150ms var(--ease-out);
-}
-.scrub:focus-visible .thumb, .scrub.dragging .thumb { opacity: 1; scale: 1; }
-@media (hover: hover) and (pointer: fine) {
-  .scrub:hover .thumb { opacity: 1; scale: 1; }
-}
-.scrub:focus-visible .track { outline: 2px solid var(--ink); outline-offset: 5px; }
-.times {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  color: var(--muted);
-}
-
-/* ---------- controls ---------- */
-.controls { display: flex; align-items: center; gap: 6px; }
-.btn {
   appearance: none;
   border: 0;
   margin: 0;
-  flex: none;
   width: 48px;
   height: 48px;
   border-radius: 50%;
@@ -399,170 +301,138 @@ body {
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
-  transition: transform 150ms var(--ease-out), background-color 200ms ease;
+  transition: transform 150ms var(--ease-out);
 }
-.btn svg { width: 22px; height: 22px; fill: currentColor; grid-area: 1 / 1; }
-.btn:not(:disabled):active { transform: scale(0.96); }
-.btn:disabled { opacity: 0.35; cursor: default; }
-.btn.play { width: 64px; height: 64px; background: var(--accent); color: var(--on-accent); }
-.btn.play svg { width: 26px; height: 26px; }
+/* A soft disc under the glyph on hover, arriving from slightly smaller. */
+.tbtn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--hover);
+  opacity: 0;
+  scale: 0.85;
+  transition: opacity 150ms ease, scale 200ms var(--ease-out);
+}
 @media (hover: hover) and (pointer: fine) {
-  .btn:hover:not(:disabled) { background: var(--veil); }
-  .btn.play:hover:not(:disabled) { background: color-mix(in oklab, var(--accent) 88%, var(--ink)); }
+  .tbtn:hover:not(:disabled)::before { opacity: 1; scale: 1; }
 }
-.btn:focus-visible, .fader:focus-visible, .corner:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.tbtn:not(:disabled):active { transform: scale(0.95); }
+.tbtn:disabled { opacity: 0.3; cursor: default; }
+.tbtn:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 2px; }
+.tbtn svg { position: relative; width: 26px; height: 26px; fill: currentColor; grid-area: 1 / 1; }
+.tbtn.play { width: 60px; height: 60px; }
+.tbtn.play svg { width: 36px; height: 36px; }
 
-/* Play and pause share the button and cross-fade. Keyboard toggles switch instantly. */
+/* Play and pause share the button and cross-fade; keyboard toggles switch instantly. */
 .icon { transition: opacity 300ms var(--ease-icon), transform 300ms var(--ease-icon), filter 300ms var(--ease-icon); }
 .i-pause, .app[data-playing='true'] .i-play { opacity: 0; transform: scale(0.25); filter: blur(4px); }
 .app[data-playing='true'] .i-pause { opacity: 1; transform: none; filter: none; }
 .app[data-instant] .icon { transition: none; }
 
-.speaker {
-  flex: none;
-  width: 20px;
-  height: 20px;
-  margin-left: auto;
-  fill: var(--muted);
-}
-.speaker .wave { fill: none; stroke: var(--muted); stroke-width: 1.8; stroke-linecap: round; }
-/* Volume: a thin line and a dot. Drag the dot, tap the line, or scroll. */
-.fader {
+.progress { grid-column: 1 / -1; display: grid; gap: 4px; }
+/* A line you can grab anywhere; it thickens under the pointer and while held. */
+.scrub {
   position: relative;
-  flex: 0 1 152px;
-  min-width: 72px;
-  height: 44px;
-  border-radius: 8px;
+  height: 22px;
+  display: flex;
+  align-items: center;
   cursor: pointer;
   touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
+  outline: none;
 }
-.groove {
-  position: absolute;
-  left: 7px;
-  right: 7px;
-  top: 50%;
-  height: 3px;
-  margin-top: -1.5px;
-  border-radius: 2px;
+.bar {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  border-radius: 99px;
   overflow: hidden;
-  background: var(--line);
+  background: var(--track);
+  transition: scale 160ms var(--ease-out);
 }
-.level {
+.fill {
   position: absolute;
   inset: 0;
   background: var(--ink);
   transform-origin: left center;
-  transform: scaleX(0.64);
+  transform: scaleX(0);
 }
-.cap {
-  position: absolute;
-  left: 0;
-  top: 50%;
-  width: 14px;
-  height: 14px;
-  margin-top: -7px;
-  border-radius: 50%;
-  background: var(--ink);
-  transition: scale 150ms var(--ease-out);
-}
-.fader.dragging .cap { scale: 1.25; }
+.scrub.dragging .bar { scale: 1 1.75; }
 @media (hover: hover) and (pointer: fine) {
-  .fader:hover .cap { scale: 1.15; }
-  .fader.dragging .cap { scale: 1.25; }
+  .scrub:hover .bar { scale: 1 1.75; }
 }
-
-.source {
-  margin: 0;
+.scrub:focus-visible .bar { outline: 2px solid var(--ink-2); outline-offset: 4px; }
+.times {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
+  justify-content: space-between;
+  font-size: 12px;
   font-weight: 500;
-  line-height: 1.4;
-  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
 }
-.source a { color: var(--ink); text-underline-offset: 3px; text-decoration-color: var(--line); }
-.dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
-.app[data-mode='live'][data-playing='true'] .dot { background: var(--ink); }
 
-.credit { margin: 0; max-width: 48ch; font-size: 12px; line-height: 1.5; color: var(--muted); }
-.credit a { color: inherit; text-underline-offset: 3px; }
-.nowrap { white-space: nowrap; }
-.source a:focus-visible, .credit a:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; border-radius: 2px; }
+.volume { grid-column: 2; width: 100%; display: flex; align-items: center; gap: 10px; color: var(--ink-3); }
+.volume .scrub { flex: 1; }
+.vicon { flex: none; width: 18px; height: 18px; fill: currentColor; }
+.vicon .wave { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+@container (width < 700px) {
+  .volume { grid-column: 1; }
+}
 
 /* ---------- chrome ---------- */
-.corner {
+.top {
   position: absolute;
   top: calc(16px + env(safe-area-inset-top, 0px));
-  right: var(--gutter-r);
-  width: 44px;
-  height: 44px;
+  left: var(--g);
+  right: calc(var(--g) - 10px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+}
+.source { margin: 0; font-size: 12px; font-weight: 500; color: var(--ink-3); }
+.corner {
+  position: relative;
+  pointer-events: auto;
+  width: 40px;
+  height: 40px;
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: var(--ink);
+  color: var(--ink-2);
   display: grid;
   place-items: center;
   cursor: pointer;
   touch-action: manipulation;
-  transition: opacity 150ms ease, transform 150ms var(--ease-out), background-color 200ms ease;
+  transition: transform 150ms var(--ease-out), color 150ms ease;
 }
-.corner svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; grid-area: 1 / 1; }
-.corner .i-exit, .app[data-full] .corner .i-enter { display: none; }
-.app[data-full] .corner .i-exit { display: block; }
-.corner:active { transform: scale(0.96); }
-@media (hover: hover) and (pointer: fine) {
-  .corner:hover { background: var(--veil); }
-}
-
-.keys {
+.corner svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.corner:active { transform: scale(0.95); }
+@media (hover: hover) and (pointer: fine) { .corner:hover { color: var(--ink); } }
+.corner:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 2px; }
+.credit {
   position: absolute;
-  right: var(--gutter-r);
+  left: var(--g);
   bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  max-width: min(60ch, 40cqw);
   margin: 0;
-  font-size: 12px;
-  color: var(--muted);
-  display: flex;
-  align-items: center;
-  gap: 18px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--ink-3);
   transition: opacity 150ms ease;
 }
-.keys kbd {
-  font: inherit;
-  font-weight: 600;
-  min-width: 20px;
-  padding: 2px 6px;
-  border-radius: 5px;
-  background: var(--veil);
-  color: var(--ink);
-  text-align: center;
-  box-sizing: border-box;
+.credit a { color: inherit; text-underline-offset: 2px; }
+.source a:focus-visible, .credit a:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 2px; border-radius: 2px; }
+@container (width < 700px) {
+  .credit { max-width: none; right: var(--g); }
 }
-.keys span { display: inline-flex; align-items: center; gap: 6px; }
-.keys kbd + kbd { margin-left: -2px; }
-@media not ((hover: hover) and (pointer: fine)) { .keys { display: none; } }
-@container (width < 1100px) or (height < 640px) or (aspect-ratio < 1.15) { .keys { display: none; } }
-
-/* The chrome steps back when the pointer rests. */
+/* The chrome steps back when the pointer rests, slowly; it returns at once. */
 .app[data-idle] { cursor: none; }
-.app[data-idle] .corner, .app[data-idle] .keys { opacity: 0; transition-duration: 700ms; }
-
-@container (width < 760px) or (aspect-ratio < 1.15) {
-  .title { font-size: 44px; }
-  .artist { font-size: clamp(17px, 3cqw, 23px); }
-  .album { font-size: clamp(15px, 2.2cqw, 18px); }
-  .controls { gap: 4px; }
-  .btn.play { width: 60px; height: 60px; }
-  .corner { display: none; }
-}
-@container (width < 760px) and (height < 760px) {
-  .credit { display: none; }
-}
+.app[data-idle] :is(.top, .credit) { opacity: 0; transition-duration: 700ms; }
 
 @media (prefers-reduced-motion: reduce) {
-  :root { --repaint: 400ms; }
-  .blob { animation: none; }
+  .amb-layer { animation: none; }
+  .retract, .app[data-playing='true'] .retract { transform: none; transition: none; }
   .i-pause, .app[data-playing='true'] .i-play { transform: none; filter: none; }
 }

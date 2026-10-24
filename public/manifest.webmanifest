@@ -4,11 +4,23 @@
   "description": "A turntable that shows what your Mac is playing.",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#1c221f",
-  "theme_color": "#1c221f",
+  "background_color": "#efece6",
+  "theme_color": "#efece6",
   "icons": [
-    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
   ]
 }

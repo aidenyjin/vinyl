@@ -1,10 +1,11 @@
 # Vinyl
 
-A turntable for your Mac's screen. Vinyl shows the song playing in Apple Music or Spotify as a record turning at an easy pace, with the cover art as its label. Each cover sets the colour of the room, and its colours drift slowly behind the record while it plays.
+A turntable for your Mac's screen. Vinyl shows the song playing in Apple Music or Spotify as a record in its sleeve, with the cover art on both. The room behind it is the cover, washed into paper, drifting slowly while the music plays.
 
-- The tonearm is the progress bar. It moves from the edge of the record toward the label as the song plays, lifts when you pause, and cues across the record when you scrub.
-- When the song changes, the arm lifts off, the record slides away and the next one drops onto the platter.
-- Play, pause, skip, seek and volume all control the real app on your Mac.
+- Press play and the record slides out of its sleeve and the tonearm swings onto it. Pause, and the arm goes home and the record slides back in.
+- The tonearm is the progress bar. It moves from the edge of the record toward the label as the song plays, and cues across the record when you scrub.
+- Skip forward and the next record arrives from the right; skip back and it comes from the left.
+- Play, pause, skip, seek and volume all control the real app on your Mac. Tap the record to pause it.
 
 ## Run it
 
@@ -34,7 +35,7 @@ In Safari, open <http://localhost:4747> and choose **File → Add to Dock**. Vin
 | ↑ ↓ | Volume |
 | F | Full screen. The screen stays awake while it's full screen. |
 
-The volume line beside the play button works with a mouse or a finger: drag the dot, click anywhere along the line, or scroll on it.
+The progress and volume lines work with a mouse or a finger: click or drag anywhere along them. You can also scroll on the volume line.
 
 ### Options
 
@@ -68,5 +69,3 @@ The demo playlist pairs public-domain music with public-domain paintings from Th
 - Pieter Bruegel the Elder, *The Harvesters*, 1565 ([source](https://www.metmuseum.org/art/collection/search/435809))
 - Katsushika Hokusai, *Under the Wave off Kanagawa*, ca. 1830–32 ([source](https://www.metmuseum.org/art/collection/search/45434)). Debussy chose this print for the first edition of *La Mer*.
 - James McNeill Whistler, *Nocturne: The Thames at Battersea*, 1878 ([source](https://www.metmuseum.org/art/collection/search/337702))
-
-The typeface is [Archivo](https://fonts.google.com/specimen/Archivo) by Omnibus-Type, under the SIL Open Font License.

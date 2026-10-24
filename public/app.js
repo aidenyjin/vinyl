@@ -1,14 +1,12 @@
+// Vinyl: the record, the tonearm, the music source and the controls.
+// The markup in index.html supplies the elements by id; the styles place them.
 (() => {
   'use strict';
 
-  const $ = (id) => document.getElementById(id);
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const now = () => performance.now();
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-  const motion = matchMedia('(prefers-reduced-motion: reduce)');
-  let reduced = motion.matches;
-  motion.addEventListener?.('change', (e) => { reduced = e.matches; });
+  const EASE_OUT = 'cubic-bezier(0.23, 1, 0.32, 1)';
 
   // ---------- tonearm geometry, in record radii with the spindle at 0,0 ----------
   const PIVOT = { x: 1.12, y: -0.78 };
@@ -16,7 +14,7 @@
   const REST = -4;                          // degrees, arm on its rest post
   const OUTER = 0.955;                      // lead-in groove
   const INNER = 0.52;                       // run-out groove
-  const SPEED = 80;                         // degrees per second, about 13 rpm. True 33⅓ (200) looks frantic on a screen.
+  const SPEED = 80;                         // degrees per second; true 33⅓ (200) looks frantic on a screen
 
   function stylusRadius(deg) {
     const a = (deg * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
@@ -34,254 +32,8 @@
   const armFor = (progress) => angleFor(OUTER - (OUTER - INNER) * clamp(progress, 0, 1));
   const OFF_RECORD = angleFor(1.04);
 
-  // ---------- elements ----------
-  const el = {
-    app: $('app'), record: $('record'), spin: $('spin'), sheen: $('sheen'),
-    arm: $('arm'), armShadow: $('armShadow'), label: $('label'),
-    sourceText: $('sourceText'), title: $('title'), artist: $('artist'), album: $('album'), credit: $('credit'),
-    scrub: $('scrub'), fill: $('fill'), thumb: $('thumb'), elapsed: $('elapsed'), remaining: $('remaining'),
-    prev: $('prev'), play: $('play'), next: $('next'),
-    knob: $('knob'), knobLevel: $('knobLevel'), knobCap: $('knobCap'), full: $('fullscreen'),
-  };
-
-  // ---------- what is playing ----------
-  const model = {
-    mode: 'demo',
-    status: 'paused',       // playing | paused | idle | permission | error | offline
-    track: null,            // { id, title, artist, album, duration, art, credit?, creditUrl? }
-    position: 0,
-    at: now(),
-    volume: 64,
-    sourceLabel: '',
-  };
-  let scrubbing = null;     // seconds while the scrubber is held
-  let holdStatusUntil = 0;  // keep an optimistic play/pause until the Mac catches up
-  let liftUntil = 0;        // lift the arm early when the user skips
-  let quickUntil = 0;       // a skip the user asked for swaps records briskly
-
-  const isSong = (t) => !!t && !t.status;
-  const playing = () => model.status === 'playing' && isSong(model.track);
-  function positionNow() {
-    if (!isSong(model.track)) return 0;
-    if (scrubbing != null) return scrubbing;
-    const p = model.position + (playing() ? (now() - model.at) / 1000 : 0);
-    return model.track.duration ? clamp(p, 0, model.track.duration) : Math.max(0, p);
-  }
-
-  // ---------- physics ----------
-  const phys = {
-    platter: 0, platterV: 0,
-    rec: Math.random() * 360, recV: 0,
-    arm: REST, armV: 0,
-    lift: 0,
-    sheen: 0, sheenV: 0, sheenTarget: 0,
-    seated: false,
-  };
-  const geom = { R: 300, scrubW: 300, faderW: 160 };
-  let shown = null;         // the record on the platter
-  let pending = null;       // the record waiting to go on
-  let swapping = false;
-
-  const approach = (v, target, tau, dt) => v + (target - v) * (1 - Math.exp(-dt / tau));
-
-  function step(dt) {
-    const motor = playing() && !reduced;
-    phys.platterV = approach(phys.platterV, motor ? SPEED : 0, motor ? 0.9 : 1.6, dt);
-    phys.platter += phys.platterV * dt;
-    phys.recV = phys.seated ? approach(phys.recV, phys.platterV, 0.2, dt) : approach(phys.recV, 0, 1.6, dt);
-    phys.rec += phys.recV * dt;
-
-    // Where the needle should be, and whether the cue lever is up.
-    let target = REST, lift = 0;
-    const onRecord = !swapping && isSong(shown) && shown.id === model.track?.id;
-    if (onRecord) {
-      target = armFor(shown.duration ? positionNow() / shown.duration : 0);
-      lift = playing() && scrubbing == null ? 0 : 1;
-    }
-    if (now() < liftUntil) lift = 1;
-    const far = Math.abs(target - phys.arm) > 0.3;
-    if (far) lift = 1;
-
-    if (reduced) {
-      phys.arm = target; phys.armV = 0; phys.lift = lift;
-    } else {
-      phys.lift = approach(phys.lift, lift, 0.09, dt);
-      if (!far && phys.lift < 0.5) {
-        phys.arm = target; phys.armV = 0;
-      } else if (!far || phys.lift > 0.75) {
-        // A critically damped spring: no bounce, settles in about 0.6s.
-        const k = 55, c = 2 * Math.sqrt(k);
-        phys.armV += (k * (target - phys.arm) - c * phys.armV) * dt;
-        phys.arm += phys.armV * dt;
-      }
-    }
-
-    const k = 18, c = 2 * Math.sqrt(k) * 0.85;
-    phys.sheenV += (k * (phys.sheenTarget - phys.sheen) - c * phys.sheenV) * dt;
-    phys.sheen += phys.sheenV * dt;
-
-    return Math.abs(phys.platterV) > 0.05 || Math.abs(phys.recV) > 0.05 || far ||
-      Math.abs(phys.lift - lift) > 0.002 || Math.abs(phys.armV) > 0.01 ||
-      Math.abs(phys.sheenTarget - phys.sheen) > 0.01 || Math.abs(phys.sheenV) > 0.01 ||
-      playing() || scrubbing != null || swapping;
-  }
-
-  function render() {
-    const R = geom.R, lift = phys.lift;
-    el.spin.style.transform = `rotate(${(phys.rec % 360).toFixed(2)}deg)`;
-    el.sheen.style.transform = `rotate(${(-40 + phys.sheen).toFixed(2)}deg)`;
-    el.arm.style.transform = `rotate(${phys.arm.toFixed(3)}deg) scale(${(1 + 0.02 * lift).toFixed(4)})`;
-    el.armShadow.style.transform =
-      `translate(${(R * (0.012 + 0.045 * lift)).toFixed(1)}px, ${(R * (0.02 + 0.07 * lift)).toFixed(1)}px) rotate(${phys.arm.toFixed(3)}deg)`;
-    el.armShadow.style.opacity = (0.5 - 0.22 * lift).toFixed(3);
-    renderProgress();
-  }
-
-  let lastSecond = -1, lastDuration = -1;
-  function renderProgress() {
-    if (swapping && shown?.id !== model.track?.id) return; // the old song's time stays until its record leaves
-    const song = isSong(model.track) ? model.track : null;
-    const d = song?.duration || 0;
-    const p = positionNow();
-    const f = d ? clamp(p / d, 0, 1) : 0;
-    el.fill.style.transform = `scaleX(${f.toFixed(4)})`;
-    el.thumb.style.transform = `translateX(${(f * geom.scrubW).toFixed(1)}px)`;
-    const sec = Math.floor(p);
-    if (sec !== lastSecond || d !== lastDuration) {
-      lastSecond = sec; lastDuration = d;
-      el.elapsed.textContent = song ? clock(p) : '0:00';
-      el.remaining.textContent = song && d ? `-${clock(Math.max(0, d - p))}` : song ? 'Live' : '-0:00';
-      el.scrub.setAttribute('aria-valuemax', String(Math.round(d)));
-      el.scrub.setAttribute('aria-valuenow', String(sec));
-      el.scrub.setAttribute('aria-valuetext', d ? `${clock(p)} of ${clock(d)}` : clock(p));
-    }
-  }
-  const clock = (s) => {
-    s = Math.max(0, Math.floor(s));
-    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = String(s % 60).padStart(2, '0');
-    return h ? `${h}:${String(m).padStart(2, '0')}:${r}` : `${m}:${r}`;
-  };
-
-  let rafId = 0, last = 0;
-  function frame(t) {
-    const dt = Math.min(0.05, (t - last) / 1000 || 0.016);
-    last = t;
-    if (model.mode === 'demo') demo.tick();
-    const busy = step(dt);
-    render();
-    rafId = busy ? requestAnimationFrame(frame) : 0;
-  }
-  function wake() {
-    if (!rafId) { last = now(); rafId = requestAnimationFrame(frame); }
-  }
-
-  // ---------- colour from the cover ----------
-  function rgbToHsl(r, g, b) {
-    r /= 255; g /= 255; b /= 255;
-    const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
-    if (max === min) return [0, 0, l];
-    const d = max - min, s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
-    return [h / 6, s, l];
-  }
-  function hslToRgb(h, s, l) {
-    const f = (n) => {
-      const k = (n + h * 12) % 12, a = s * Math.min(l, 1 - l);
-      return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))));
-    };
-    return [f(0), f(8), f(4)];
-  }
-  const luminance = ([r, g, b]) => {
-    const c = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
-    return 0.2126 * c(r) + 0.7152 * c(g) + 0.0722 * c(b);
-  };
-  const contrast = (a, b) => { const x = luminance(a), y = luminance(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
-  const css = ([r, g, b]) => `rgb(${r} ${g} ${b})`;
-
-  function readCover(img) {
-    const size = 48, canvas = document.createElement('canvas');
-    canvas.width = canvas.height = size;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    ctx.drawImage(img, 0, 0, size, size);
-    let data;
-    try { data = ctx.getImageData(0, 0, size, size).data; } catch { return null; }
-    const bins = new Map();
-    let total = 0;
-    for (let i = 0; i < data.length; i += 4) {
-      const [h, s, l] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
-      total += l;
-      const key = (s < 0.07 ? 12 : Math.floor(h * 12)) * 6 + Math.min(5, Math.floor(l * 6));
-      let b = bins.get(key);
-      if (!b) bins.set(key, (b = { n: 0, r: 0, g: 0, b: 0, s: 0 }));
-      b.n++; b.r += data[i]; b.g += data[i + 1]; b.b += data[i + 2]; b.s += s;
-    }
-    const list = [...bins.entries()].map(([key, b]) => ({
-      key, n: b.n, sat: b.s / b.n, rgb: [b.r / b.n, b.g / b.n, b.b / b.n].map(Math.round),
-    }));
-    // The room takes the cover's largest area of real colour, not its greys.
-    const main = list.reduce((a, b) => (b.n * (0.3 + b.sat) > a.n * (0.3 + a.sat) ? b : a));
-    let accent = null, best = -1;
-    for (const c of list) {
-      const [, , l] = rgbToHsl(...c.rgb);
-      if (c === main || l < 0.1 || l > 0.94) continue;
-      const hueApart = Math.floor(c.key / 6) !== Math.floor(main.key / 6);
-      const score = Math.sqrt(c.n) * (0.15 + c.sat) * (hueApart ? 1.4 : 0.6);
-      if (score > best) { best = score; accent = c; }
-    }
-    // The moving background takes the cover's three strongest colours, each a different hue where it can.
-    const fields = [];
-    for (const c of [...list].sort((a, b) => b.n * (0.2 + b.sat) - a.n * (0.2 + a.sat))) {
-      const hue = Math.floor(c.key / 6);
-      if (!fields.some((f) => Math.floor(f.key / 6) === hue)) fields.push(c);
-      if (fields.length === 3) break;
-    }
-    while (fields.length < 3) fields.push(fields[fields.length - 1] || main);
-    const light = rgbToHsl(...main.rgb)[2] > 0.58 || total / (size * size) > 0.62;
-    return theme(main.rgb, (accent || main).rgb, light, fields.map((f) => f.rgb));
-  }
-
-  function theme(mainRgb, accentRgb, light, fieldRgbs = []) {
-    const [h, s, l] = rgbToHsl(...mainRgb);
-    const field = light
-      ? hslToRgb(h, Math.min(s, 0.34), clamp(l, 0.8, 0.88))
-      : hslToRgb(h, Math.min(s * 0.9, 0.42), clamp(l * 0.7, 0.13, 0.24));
-    const ink = light ? hslToRgb(h, Math.min(s, 0.3), 0.11) : hslToRgb(h, Math.min(s, 0.2), 0.94);
-    let [ah, as, al] = rgbToHsl(...accentRgb);
-    as = Math.min(as, 0.7);
-    let accent = hslToRgb(ah, as, al);
-    for (let i = 0; i < 40 && contrast(accent, field) < 3.2; i++) {
-      al = clamp(al + (light ? -0.02 : 0.02), 0.05, 0.95);
-      accent = hslToRgb(ah, as, al);
-    }
-    const onAccent = contrast(field, accent) >= contrast(ink, accent) ? field : ink;
-    // Background fields keep their hue and colour but sit near the room's lightness,
-    // so the text reads the same wherever they drift.
-    const blobs = fieldRgbs.map((rgb) => {
-      const [bh, bs, bl] = rgbToHsl(...rgb);
-      return css(light
-        ? hslToRgb(bh, Math.min(bs * 1.1, 0.6), clamp(bl, 0.64, 0.76))
-        : hslToRgb(bh, Math.min(bs * 1.15, 0.62), clamp(bl * 0.8, 0.24, 0.36)));
-    });
-    return { field: css(field), ink: css(ink), accent: css(accent), onAccent: css(onAccent), light, blobs };
-  }
-
-  const DEFAULT_THEME = {
-    field: '#1c221f', ink: '#eef1ec', accent: '#d8c46c', onAccent: '#1c221f', light: false,
-    blobs: ['#2f5d4f', '#5e5428', '#26453f'],
-  };
-  function paint(t) {
-    t = t || DEFAULT_THEME;
-    const s = document.documentElement.style;
-    s.setProperty('--field', t.field);
-    s.setProperty('--ink', t.ink);
-    s.setProperty('--accent', t.accent);
-    s.setProperty('--on-accent', t.onAccent);
-    (t.blobs || DEFAULT_THEME.blobs).forEach((c, i) => s.setProperty(`--c${i + 1}`, c));
-    s.colorScheme = t.light ? 'light' : 'dark';
-    document.documentElement.dataset.light = String(!!t.light);
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t.field);
-  }
-
+  // ---------- covers: pixels in, light out ----------
+  const lum = ([r, g, b]) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
   const covers = new Map();
   function loadCover(url) {
     if (!url) return Promise.resolve(null);
@@ -289,7 +41,7 @@
       covers.set(url, new Promise((resolve) => {
         const img = new Image();
         img.decoding = 'async';
-        img.onload = () => resolve({ url, theme: readCover(img) });
+        img.onload = () => resolve(readCover(url, img));
         img.onerror = () => { covers.delete(url); resolve(null); };
         img.src = url;
       }));
@@ -297,503 +49,661 @@
     }
     return covers.get(url);
   }
-  const within = (promise, ms) => Promise.race([promise, sleep(ms).then(() => undefined)]);
-
-  // ---------- the record swap ----------
-  function setLabel(cover, fade) {
-    const old = [...el.label.querySelectorAll('img')];
-    el.label.classList.toggle('has-art', !!cover);
-    if (!cover) { old.forEach((n) => n.remove()); return; }
-    const img = new Image();
-    img.alt = '';
-    img.src = cover.url;
-    el.label.insertBefore(img, el.label.querySelector('.blank').nextSibling);
-    if (fade && !reduced) {
-      img.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 500, easing: 'ease' }).finished.then(() => old.forEach((n) => n.remove()));
-    } else {
-      old.forEach((n) => n.remove());
-    }
+  function readCover(url, img) {
+    const cover = { url, img, avg: [58, 60, 66], lum: null };
+    try {
+      const c = document.createElement('canvas');
+      c.width = c.height = 12;
+      const ctx = c.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0, 12, 12);
+      const d = ctx.getImageData(0, 0, 12, 12).data;
+      let r = 0, g = 0, b = 0;
+      for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; }
+      const n = d.length / 4;
+      cover.avg = [r / n, g / n, b / n].map(Math.round);
+      cover.lum = lum(cover.avg);
+    } catch { /* a cover from file:// can't be read back; it still draws */ }
+    return cover;
   }
 
-  let recordAnim = null;
-  function offscreen() {
-    return -(el.record.offsetLeft + geom.R * 2.1);
-  }
-  // Exits are quicker than entrances, and a skip you asked for is quicker than a song ending.
-  function slideOut(quick) {
-    phys.seated = false;
-    recordAnim?.cancel();
-    if (reduced) {
-      recordAnim = el.record.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, fill: 'forwards' });
-    } else {
-      const x = offscreen(), R = geom.R;
-      recordAnim = el.record.animate([
-        { transform: 'translate(0, 0) scale(1)' },
-        { transform: 'translate(0, 0) scale(1.035)', offset: 0.2 },
-        { transform: `translate(${x}px, ${R * 0.06}px) scale(1.035)` },
-      ], { duration: quick ? 340 : 560, easing: 'cubic-bezier(0.77, 0, 0.175, 1)', fill: 'forwards' });
-    }
-    return recordAnim.finished.catch(() => {});
-  }
-  function slideIn(quick) {
-    recordAnim?.cancel();
-    if (reduced) {
-      recordAnim = el.record.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, fill: 'forwards' });
-    } else {
-      const x = offscreen(), R = geom.R;
-      recordAnim = el.record.animate([
-        { transform: `translate(${x}px, ${-R * 0.06}px) scale(1.035)` },
-        { transform: 'translate(0, 0) scale(1.035)', offset: 0.82 },
-        { transform: 'translate(0, 0) scale(1)' },
-      ], { duration: quick ? 520 : 820, easing: 'cubic-bezier(0.23, 1, 0.32, 1)', fill: 'forwards' });
-    }
-    el.record.style.transform = '';
-    return recordAnim.finished.catch(() => {});
-  }
-
-  // Text leaves fast and arrives in a short stagger. Under reduced motion both are plain cross-fades.
-  const TEXT = () => [el.title, el.artist, el.album, el.credit];
-  function textOut() {
-    for (const n of TEXT()) {
-      n.getAnimations().forEach((a) => a.cancel());
-      n.animate(reduced
-        ? [{ opacity: 1 }, { opacity: 0 }]
-        : [{ opacity: 1 }, { opacity: 0, transform: 'translateY(-6px)', filter: 'blur(4px)' }],
-      { duration: 150, easing: 'cubic-bezier(0.23, 1, 0.32, 1)', fill: 'forwards' });
-    }
-  }
-  function textIn() {
-    TEXT().forEach((n, i) => {
-      n.getAnimations().forEach((a) => a.cancel());
-      n.animate(reduced
-        ? [{ opacity: 0 }, { opacity: 1 }]
-        : [{ opacity: 0, transform: 'translateY(10px)', filter: 'blur(4px)' }, { opacity: 1, transform: 'none', filter: 'blur(0)' }],
-      { duration: reduced ? 200 : 420, delay: reduced ? 0 : 50 * i, easing: 'cubic-bezier(0.23, 1, 0.32, 1)', fill: 'backwards' });
-    });
-  }
-
-  function writeText(t) {
-    el.title.textContent = t.title;
-    el.artist.textContent = t.artist || '';
-    el.album.textContent = t.album || '';
-    el.credit.replaceChildren();
-    const source = () => {
-      const s = document.createElement('span');
-      s.className = 'nowrap';
-      s.textContent = 'The Met, public domain.';
-      return s;
-    };
-    if (t.credit) {
-      el.credit.append('Cover: ');
-      const a = document.createElement('a');
-      a.href = t.creditUrl; a.target = '_blank'; a.rel = 'noopener';
-      // Keep a date like 1870–90 on one line.
-      const m = t.credit.match(/^(.*?)((?:ca\. )?\d{4}(?:–\d{2,4})?)(.*)$/);
-      if (m) {
-        const date = document.createElement('span');
-        date.className = 'nowrap';
-        date.textContent = m[2];
-        a.append(m[1], date);
-        el.credit.append(a, m[3] || '', m[3] && /\.$/.test(m[3]) ? ' ' : '. ', source());
+  // The ambient light is the cover itself: drawn small, blurred, saturated, then shown huge.
+  // A tiny canvas scaled up by the compositor is nearly free to rotate.
+  function paintAmbient(canvas, cover, flip, tone) {
+    const S = canvas.width, ctx = canvas.getContext('2d');
+    const base = tone === 'light' ? [238, 235, 229] : [22, 23, 26];
+    ctx.fillStyle = cover ? `rgb(${cover.avg.join(' ')})` : `rgb(${base.join(' ')})`;
+    ctx.fillRect(0, 0, S, S);
+    if (cover) {
+      ctx.save();
+      if (flip) { ctx.translate(S / 2, S / 2); ctx.rotate(Math.PI * 0.75); ctx.translate(-S / 2, -S / 2); }
+      if ('filter' in ctx) {
+        ctx.filter = `blur(${S / 12}px) saturate(${tone === 'light' ? 1.3 : 1.7})`;
+        ctx.drawImage(cover.img, -S * 0.2, -S * 0.2, S * 1.4, S * 1.4);
       } else {
-        a.textContent = t.credit;
-        el.credit.append(a, '. ', source());
+        // No canvas filters: a tiny draw scaled back up is a blur of its own.
+        const t = document.createElement('canvas');
+        t.width = t.height = 6;
+        t.getContext('2d').drawImage(cover.img, 0, 0, 6, 6);
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(t, -S * 0.2, -S * 0.2, S * 1.4, S * 1.4);
       }
+      ctx.restore();
+      ctx.filter = 'none';
     }
-    document.title = isSong(t) ? `${t.title} · ${t.artist || 'Vinyl'}` : 'Vinyl';
-    fitTitle();
-  }
-
-  // Largest size that keeps the title to two lines without splitting a word.
-  // Words are measured unbroken; only a word too long even at the smallest size may break.
-  function fitTitle() {
-    const t = el.title, w = t.clientWidth;
-    if (!w) return;
-    const narrow = el.app.clientWidth < 760 || el.app.clientWidth / el.app.clientHeight < 1.15;
-    const max = narrow ? Math.min(96, w / 3.6) : clamp(w / 3.3, 44, 168);
-    const min = narrow ? 28 : 34;
-    const lines = () => Math.round(t.getBoundingClientRect().height / parseFloat(getComputedStyle(t).lineHeight));
-    const fits = () => lines() <= 2 && t.scrollWidth <= t.clientWidth;
-    t.style.overflowWrap = 'normal';
-    t.style.fontSize = `${max}px`;
-    if (!fits()) {
-      let lo = min, hi = max;
-      for (let i = 0; i < 9; i++) {
-        const mid = (lo + hi) / 2;
-        t.style.fontSize = `${mid}px`;
-        if (fits()) lo = mid; else hi = mid;
-      }
-      t.style.fontSize = `${lo * 0.98}px`; // a hair under, so sub-pixel rounding never splits a word
+    if (tone === 'light') {
+      // Paper: the cover's colour, washed toward white.
+      ctx.fillStyle = 'rgba(247, 245, 240, 0.62)';
+    } else {
+      // Bring every cover to the same dim light, so white text always reads.
+      const l = cover?.lum ?? 0.5;
+      ctx.fillStyle = `rgba(0, 0, 0, ${clamp(1 - 0.2 / Math.max(l, 0.01), 0.18, 0.72).toFixed(3)})`;
     }
-    t.style.overflowWrap = '';
+    ctx.fillRect(0, 0, S, S);
   }
 
-  function want(track) {
-    if (pending) { pending = track; return; }
-    if (shown && shown.id === track.id) { shown = track; return; }
-    pending = track;
-    if (!swapping) swap();
-  }
+  function mount(root, options = {}) {
+    const o = {
+      tone: 'dark',            // ambient light: 'dark' (under white text) or 'light' (paper, under dark text)
+      restWhenPaused: false,   // the arm goes home when the music stops
+      armDelay: 0,             // ms the arm waits after play before swinging in
+      arrowKeys: true,         // ←/→ skip songs
+      apiBase: '',
+      assetBase: '',
+      ...options,
+    };
+    const $ = (id) => root.querySelector('#' + id);
+    const el = {
+      record: $('record'), spin: $('spin'), sheen: $('sheen'), label: $('label'),
+      arm: $('arm'), armShadow: $('armShadow'), sleeve: $('sleeve'), ambient: $('ambient'),
+      title: $('title'), sub: $('sub'), artist: $('artist'), album: $('album'), source: $('source'), credit: $('credit'),
+      scrub: $('scrub'), fill: $('fill'), elapsed: $('elapsed'), remaining: $('remaining'),
+      prev: $('prev'), play: $('play'), next: $('next'), vol: $('vol'), volFill: $('volFill'), full: $('fullscreen'),
+    };
+    let alive = true;
+    const cleanups = [];
+    const on = (target, type, fn, opts) => {
+      if (!target) return;
+      target.addEventListener(type, fn, opts);
+      cleanups.push(() => target.removeEventListener(type, fn, opts));
+    };
 
-  async function swap() {
-    swapping = true;
-    wake();
-    const quick = () => now() < quickUntil;
-    let textFor = null;     // the track whose words are already showing
-    if (shown) {
-      // A skip you asked for answers at once in the words; the record still waits for the needle.
-      if (quick() && pending) {
-        textOut();
-        await sleep(150);
-        textFor = pending;
-        writeText(textFor);
-        textIn();
-      }
-      // Never pull a record out from under the needle.
-      const t0 = now();
-      while (phys.arm > OFF_RECORD && now() - t0 < (quick() ? 500 : 1400) && !reduced) await sleep(20);
-      if (!textFor) textOut();
-      await slideOut(quick());
+    const motion = matchMedia('(prefers-reduced-motion: reduce)');
+    let reduced = motion.matches;
+    on(motion, 'change', (e) => { reduced = e.matches; });
+
+    // ---------- what is playing ----------
+    const model = { mode: 'demo', status: 'paused', track: null, position: 0, at: now(), volume: 64, sourceLabel: '' };
+    let scrubbing = null;     // seconds while the scrubber is held
+    let holdStatusUntil = 0;  // keep an optimistic play/pause until the Mac catches up
+    let liftUntil = 0;        // lift the arm early when the user skips
+    let quickUntil = 0;       // a skip the user asked for swaps briskly
+    let dir = 1;              // +1 forward (next arrives from the right), -1 back
+    let playSince = 0;
+
+    const isSong = (t) => !!t && !t.status;
+    const playing = () => model.status === 'playing' && isSong(model.track);
+    function positionNow() {
+      if (!isSong(model.track)) return 0;
+      if (scrubbing != null) return scrubbing;
+      const p = model.position + (playing() ? (now() - model.at) / 1000 : 0);
+      return model.track.duration ? clamp(p, 0, model.track.duration) : Math.max(0, p);
     }
-    while (pending) {
-      const track = pending;
-      const cover = await within(loadCover(track.art), 1600);
-      if (pending !== track) continue;
-      pending = null;
-      shown = track;
-      setLabel(cover || null, false);
-      paint(cover?.theme);
-      if (textFor !== track) { writeText(track); textIn(); }
-      textFor = null;
-      phys.recV = 0;
-      await slideIn(quick());
-      phys.seated = true;
-      if (cover === undefined) {
-        loadCover(track.art).then((c) => { if (c && shown === track) { setLabel(c, true); paint(c.theme); } });
+
+    // ---------- physics ----------
+    const phys = { platterV: 0, rec: Math.random() * 360, recV: 0, arm: REST, armV: 0, lift: 0, sheen: 0, sheenV: 0, sheenTarget: 0, seated: false };
+    const geom = { R: 300, scrubW: 300 };
+    let shown = null, pending = null, swapping = false;
+    const approach = (v, target, tau, dt) => v + (target - v) * (1 - Math.exp(-dt / tau));
+
+    function step(dt) {
+      const motor = playing() && !reduced;
+      phys.platterV = approach(phys.platterV, motor ? SPEED : 0, motor ? 0.9 : 1.6, dt);
+      phys.recV = phys.seated ? approach(phys.recV, phys.platterV, 0.2, dt) : approach(phys.recV, 0, 1.6, dt);
+      phys.rec += phys.recV * dt;
+
+      let target = REST, lift = 0;
+      const home = o.restWhenPaused && (!playing() || now() - playSince < o.armDelay);
+      const onRecord = !swapping && !home && isSong(shown) && shown.id === model.track?.id;
+      if (onRecord) {
+        target = armFor(shown.duration ? positionNow() / shown.duration : 0);
+        lift = playing() && scrubbing == null ? 0 : 1;
       }
-      if (pending) {
-        // Asked for another while this one was arriving: words first, then the record.
-        textOut();
-        await sleep(150);
-        if (pending) { textFor = pending; writeText(textFor); textIn(); }
-        await slideOut(true);
-      }
-    }
-    swapping = false;
-    wake();
-  }
+      if (now() < liftUntil) lift = 1;
+      const far = Math.abs(target - phys.arm) > 0.3;
+      if (far) lift = 1;
 
-  // ---------- state in, state out ----------
-  function statusTrack(status, message) {
-    const copy = {
-      idle: ['Nothing playing', 'Start a song in Music or Spotify.', ''],
-      permission: ['Allow Vinyl to see your music', 'Open System Settings, then Privacy & Security, then Automation.',
-        'Turn on Music and Spotify under the app that runs the helper, such as Terminal.'],
-      error: ['Can’t reach your music app', message || 'The helper hit an error talking to Music or Spotify.', ''],
-      offline: ['Lost the helper', 'Reconnecting to your Mac…', 'Keep the Terminal window with npm start open.'],
-    }[status];
-    return { id: `status:${status}`, status, title: copy[0], artist: copy[1], album: copy[2], duration: 0 };
-  }
-
-  function sync() {
-    el.app.dataset.playing = String(playing());
-    el.app.dataset.mode = model.mode;
-    el.play.setAttribute('aria-label', playing() ? 'Pause' : 'Play');
-    const disabled = !isSong(model.track);
-    [el.prev, el.play, el.next].forEach((b) => { b.disabled = disabled && model.mode === 'live'; });
-    renderVolume();
-    renderSource();
-    if (model.track) want(model.track);
-    wake();
-  }
-
-  function renderSource() {
-    const t = el.sourceText;
-    t.replaceChildren();
-    if (model.mode === 'demo') {
-      const a = document.createElement('a');
-      a.href = 'https://github.com/aidenyjin/vinyl#readme'; a.target = '_blank'; a.rel = 'noopener';
-      a.textContent = 'Show what your Mac is playing';
-      t.append('Demo playlist. ', a);
-      return;
-    }
-    const label = model.sourceLabel || 'your Mac';
-    t.textContent = {
-      playing: `Playing from ${label}`,
-      paused: `Paused in ${label}`,
-      idle: 'Connected to your Mac',
-      permission: 'Waiting for permission',
-      error: 'Something went wrong',
-      offline: 'Reconnecting…',
-    }[model.status] || '';
-  }
-
-  function renderVolume() {
-    const v = Math.round(model.volume);
-    el.knobLevel.style.transform = `scaleX(${v / 100})`;
-    el.knobCap.style.transform = `translateX(${((v / 100) * geom.faderW).toFixed(1)}px)`;
-    el.knob.setAttribute('aria-valuenow', String(v));
-  }
-
-  // ---------- the demo source ----------
-  const demo = {
-    list: (window.VINYL_DEMO || []).map((t, i) => ({ ...t, id: `demo:${i}` })),
-    i: 0,
-    start() {
-      model.mode = 'demo';
-      model.status = 'playing';
-      model.sourceLabel = 'Demo';
-      this.load(0, 74);
-    },
-    load(i, at = 0) {
-      if (!this.list.length) return;
-      this.i = (i + this.list.length) % this.list.length;
-      model.track = this.list[this.i];
-      model.position = at;
-      model.at = now();
-      sync();
-    },
-    tick() {
-      if (playing() && model.track.duration && positionNow() >= model.track.duration) this.load(this.i + 1);
-    },
-    // act() has already flipped play/pause and moved the position.
-    send(action, value) {
-      if (action === 'next') this.load(this.i + 1);
-      else if (action === 'previous') this.load(this.i - 1);
-      else if (action === 'volume') model.volume = value;
-      sync();
-      return Promise.resolve();
-    },
-  };
-
-  // ---------- the live source ----------
-  const live = {
-    events: null,
-    connect() {
-      model.mode = 'live';
-      this.events = new EventSource('api/events');
-      this.events.onmessage = (e) => { try { this.apply(JSON.parse(e.data)); } catch {} };
-      this.events.onerror = () => {
-        if (model.status === 'offline') return;
-        model.status = 'offline';
-        model.track = statusTrack('offline');
-        sync();
-      };
-    },
-    apply(s) {
-      if (!s.available) { this.events?.close(); demo.start(); return; }
-      model.sourceLabel = s.sourceLabel || '';
-      if (!s.track) {
-        model.status = s.status === 'permission' || s.status === 'error' ? s.status : 'idle';
-        model.track = statusTrack(model.status, s.message);
-        return sync();
-      }
-      const same = model.track?.id === s.track.id;
-      const status = s.status === 'playing' ? 'playing' : 'paused';
-      if (now() > holdStatusUntil || status === model.status) model.status = status;
-      if (!same) model.track = { ...s.track };
-      else Object.assign(model.track, { duration: s.track.duration });
-      if (scrubbing == null) {
-        const predicted = positionNow();
-        if (!same || Math.abs(predicted - s.position) > 0.75 || model.status !== 'playing') {
-          model.position = s.position;
-          model.at = now();
+      if (reduced) {
+        phys.arm = target; phys.armV = 0; phys.lift = lift;
+      } else {
+        phys.lift = approach(phys.lift, lift, 0.09, dt);
+        if (!far && phys.lift < 0.5) {
+          phys.arm = target; phys.armV = 0;
+        } else if (!far || phys.lift > 0.75) {
+          // A critically damped spring: no bounce, settles in about 0.6s.
+          const k = 55, c = 2 * Math.sqrt(k);
+          phys.armV += (k * (target - phys.arm) - c * phys.armV) * dt;
+          phys.arm += phys.armV * dt;
         }
       }
-      if (!knobDrag) model.volume = s.volume ?? model.volume;
-      sync();
-    },
-    send(action, value) {
-      return fetch('api/control', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-vinyl': '1' },
-        body: JSON.stringify({ action, value }),
-      }).then((r) => (r.ok ? r.json() : null)).then((s) => s && this.apply(s)).catch(() => {});
-    },
-  };
 
-  const source = () => (model.mode === 'live' ? live : demo);
+      const k = 18, c = 2 * Math.sqrt(k) * 0.85;
+      phys.sheenV += (k * (phys.sheenTarget - phys.sheen) - c * phys.sheenV) * dt;
+      phys.sheen += phys.sheenV * dt;
 
-  // ---------- controls ----------
-  function act(action, value) {
-    if (!isSong(model.track)) return;
-    if (action === 'playpause') {
-      model.position = positionNow(); model.at = now();
-      model.status = playing() ? 'paused' : 'playing';
-      holdStatusUntil = now() + 1500;
-      sync();
+      return Math.abs(phys.platterV) > 0.05 || Math.abs(phys.recV) > 0.05 || far ||
+        Math.abs(phys.lift - lift) > 0.002 || Math.abs(phys.armV) > 0.01 ||
+        Math.abs(phys.sheenTarget - phys.sheen) > 0.01 || Math.abs(phys.sheenV) > 0.01 ||
+        playing() || scrubbing != null || swapping || home;
     }
-    if (action === 'next' || action === 'previous') { liftUntil = now() + 1200; quickUntil = now() + 1500; }
-    if (action === 'previous' && positionNow() > 3) { action = 'seek'; value = 0; liftUntil = 0; }
-    if (action === 'seek') {
-      value = clamp(value, 0, model.track.duration || value);
-      model.position = value; model.at = now();
+
+    function render() {
+      const R = geom.R, lift = phys.lift;
+      if (el.spin) el.spin.style.transform = `rotate(${(phys.rec % 360).toFixed(2)}deg)`;
+      if (el.sheen) el.sheen.style.transform = `rotate(${(-40 + phys.sheen).toFixed(2)}deg)`;
+      if (el.arm) el.arm.style.transform = `rotate(${phys.arm.toFixed(3)}deg) scale(${(1 + 0.02 * lift).toFixed(4)})`;
+      if (el.armShadow) {
+        el.armShadow.style.transform =
+          `translate(${(R * (0.012 + 0.045 * lift)).toFixed(1)}px, ${(R * (0.02 + 0.07 * lift)).toFixed(1)}px) rotate(${phys.arm.toFixed(3)}deg)`;
+        el.armShadow.style.opacity = (0.45 - 0.2 * lift).toFixed(3);
+      }
+      renderProgress();
     }
-    wake();
-    source().send(action, value);
-  }
 
-  el.play.addEventListener('click', () => act('playpause'));
-  // Touching the record stops it, the way it would on a real deck.
-  el.record.addEventListener('click', () => act('playpause'));
-  el.next.addEventListener('click', () => act('next'));
-  el.prev.addEventListener('click', () => act('previous'));
-
-  // Scrubbing cues the tonearm across the record as you drag.
-  function fractionAt(e) {
-    const r = el.scrub.getBoundingClientRect();
-    return clamp((e.clientX - r.left) / r.width, 0, 1);
-  }
-  el.scrub.addEventListener('pointerdown', (e) => {
-    if (!isSong(model.track) || !model.track.duration) return;
-    el.scrub.setPointerCapture(e.pointerId);
-    el.scrub.classList.add('dragging');
-    scrubbing = fractionAt(e) * model.track.duration;
-    wake();
-  });
-  el.scrub.addEventListener('pointermove', (e) => {
-    if (scrubbing == null) return;
-    scrubbing = fractionAt(e) * model.track.duration;
-  });
-  const endScrub = () => {
-    if (scrubbing == null) return;
-    const to = scrubbing;
-    scrubbing = null;
-    el.scrub.classList.remove('dragging');
-    act('seek', to);
-  };
-  el.scrub.addEventListener('pointerup', endScrub);
-  el.scrub.addEventListener('pointercancel', endScrub);
-  el.scrub.addEventListener('keydown', (e) => {
-    const step = { ArrowRight: 5, ArrowUp: 5, ArrowLeft: -5, ArrowDown: -5, PageUp: 30, PageDown: -30 }[e.key];
-    if (step == null && e.key !== 'Home' && e.key !== 'End') return;
-    e.preventDefault();
-    e.stopPropagation();
-    if (!isSong(model.track)) return;
-    const d = model.track.duration || 0;
-    act('seek', e.key === 'Home' ? 0 : e.key === 'End' ? Math.max(0, d - 1) : positionNow() + step);
-  });
-
-  // The volume fader: drag the cap, tap the groove, scroll, or use the arrow keys.
-  let knobDrag = null, volumeTimer = 0;
-  function setVolume(v) {
-    model.volume = clamp(Math.round(v), 0, 100);
-    renderVolume();
-    clearTimeout(volumeTimer);
-    volumeTimer = setTimeout(() => source().send('volume', model.volume), 90);
-  }
-  el.knob.addEventListener('pointerdown', (e) => {
-    el.knob.setPointerCapture(e.pointerId);
-    el.knob.classList.add('dragging');
-    // Grabbing the cap keeps it under the finger where you took hold; anywhere else on the groove jumps there first.
-    const cap = el.knobCap.getBoundingClientRect();
-    if (e.clientX < cap.left || e.clientX > cap.right) {
-      const left = el.knob.getBoundingClientRect().left;
-      setVolume(((e.clientX - left - cap.width / 2) / geom.faderW) * 100);
+    let lastSecond = -1, lastDuration = -1;
+    function renderProgress() {
+      if (swapping && shown?.id !== model.track?.id) return;
+      const song = isSong(model.track) ? model.track : null;
+      const d = song?.duration || 0;
+      const p = positionNow();
+      const f = d ? clamp(p / d, 0, 1) : 0;
+      if (el.fill) el.fill.style.transform = `scaleX(${f.toFixed(4)})`;
+      const sec = Math.floor(p);
+      if (sec !== lastSecond || d !== lastDuration) {
+        lastSecond = sec; lastDuration = d;
+        if (el.elapsed) el.elapsed.textContent = song ? clock(p) : '0:00';
+        if (el.remaining) el.remaining.textContent = song && d ? `-${clock(Math.max(0, d - p))}` : song ? 'Live' : '-0:00';
+        if (el.scrub) {
+          el.scrub.setAttribute('aria-valuemax', String(Math.round(d)));
+          el.scrub.setAttribute('aria-valuenow', String(sec));
+          el.scrub.setAttribute('aria-valuetext', d ? `${clock(p)} of ${clock(d)}` : clock(p));
+        }
+      }
     }
-    knobDrag = { x: e.clientX, v: model.volume };
-  });
-  el.knob.addEventListener('pointermove', (e) => {
-    if (knobDrag) setVolume(knobDrag.v + ((e.clientX - knobDrag.x) / geom.faderW) * 100);
-  });
-  const endKnob = () => { knobDrag = null; el.knob.classList.remove('dragging'); };
-  el.knob.addEventListener('pointerup', endKnob);
-  el.knob.addEventListener('pointercancel', endKnob);
-  el.knob.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : -e.deltaY;
-    setVolume(model.volume + d * 0.06);
-  }, { passive: false });
-  el.knob.addEventListener('keydown', (e) => {
-    const step = { ArrowUp: 2, ArrowRight: 2, ArrowDown: -2, ArrowLeft: -2, PageUp: 10, PageDown: -10 }[e.key];
-    if (step == null && e.key !== 'Home' && e.key !== 'End') return;
-    e.preventDefault();
-    e.stopPropagation();
-    setVolume(e.key === 'Home' ? 0 : e.key === 'End' ? 100 : model.volume + step);
-  });
-
-  // Keyboard shortcuts. Icons switch instantly for keys; you press these a lot.
-  addEventListener('keydown', (e) => {
-    if (e.metaKey || e.ctrlKey || e.altKey) return;
-    const onButton = e.target.closest?.('button, a, input');
-    const instant = () => {
-      el.app.dataset.instant = '';
-      requestAnimationFrame(() => requestAnimationFrame(() => delete el.app.dataset.instant));
+    const clock = (s) => {
+      s = Math.max(0, Math.floor(s));
+      const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = String(s % 60).padStart(2, '0');
+      return h ? `${h}:${String(m).padStart(2, '0')}:${r}` : `${m}:${r}`;
     };
-    if (e.key === ' ' && !onButton) { e.preventDefault(); instant(); act('playpause'); }
-    else if (e.key === 'ArrowRight') { e.preventDefault(); e.shiftKey ? act('seek', positionNow() + 10) : act('next'); }
-    else if (e.key === 'ArrowLeft') { e.preventDefault(); e.shiftKey ? act('seek', positionNow() - 10) : act('previous'); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setVolume(model.volume + 5); }
-    else if (e.key === 'ArrowDown') { e.preventDefault(); setVolume(model.volume - 5); }
-    else if (e.key === 'f' || e.key === 'F') toggleFull();
-  });
 
-  // ---------- full screen, idle cursor, light ----------
-  let wakeLock = null;
-  async function holdScreen(on) {
-    try {
-      if (on && !wakeLock && navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen');
-      if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
-    } catch { wakeLock = null; }
-  }
-  function toggleFull() {
-    const doc = document;
-    const active = doc.fullscreenElement || doc.webkitFullscreenElement;
-    const req = el.app.requestFullscreen || el.app.webkitRequestFullscreen;
-    const exit = doc.exitFullscreen || doc.webkitExitFullscreen;
-    try {
-      const p = active ? exit?.call(doc) : req?.call(el.app);
-      p?.catch?.(() => {});
-    } catch {}
-  }
-  el.full.addEventListener('click', toggleFull);
-  const onFull = () => {
-    const on = !!(document.fullscreenElement || document.webkitFullscreenElement);
-    if (on) el.app.dataset.full = ''; else delete el.app.dataset.full;
-    el.full.setAttribute('aria-label', on ? 'Exit full screen' : 'Full screen');
-    holdScreen(on);
-  };
-  document.addEventListener('fullscreenchange', onFull);
-  document.addEventListener('webkitfullscreenchange', onFull);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && el.app.dataset.full != null) holdScreen(true); });
-
-  let idleTimer = 0;
-  addEventListener('pointermove', (e) => {
-    if (e.pointerType === 'mouse') {
-      delete el.app.dataset.idle;
-      clearTimeout(idleTimer);
-      idleTimer = setTimeout(() => { el.app.dataset.idle = ''; }, 2600);
+    let rafId = 0, last = 0;
+    function frame(t) {
+      if (!alive) return;
+      const dt = Math.min(0.05, (t - last) / 1000 || 0.016);
+      last = t;
+      if (model.mode === 'demo') demo.tick();
+      const busy = step(dt);
+      render();
+      rafId = busy ? requestAnimationFrame(frame) : 0;
     }
-    // The light on the vinyl follows the pointer a little.
-    if (!reduced) {
-      phys.sheenTarget = (e.clientX / innerWidth - 0.5) * 16 + (e.clientY / innerHeight - 0.5) * -6;
+    function wake() {
+      if (alive && !rafId) { last = now(); rafId = requestAnimationFrame(frame); }
+    }
+
+    // ---------- light ----------
+    function showAmbient(cover) {
+      if (!el.ambient) return;
+      const slot = document.createElement('div');
+      slot.className = 'amb-slot';
+      for (let i = 0; i < 2; i++) {
+        const c = document.createElement('canvas');
+        c.className = `amb-layer l${i + 1}`;
+        c.width = c.height = 96;
+        paintAmbient(c, cover, i === 1, o.tone);
+        slot.append(c);
+      }
+      el.ambient.append(slot);
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta && cover) {
+        const k = o.tone === 'light' ? 0 : 0.35;
+        meta.setAttribute('content', o.tone === 'light' ? '#efece6' : `rgb(${cover.avg.map((v) => Math.round(v * k)).join(' ')})`);
+      }
+      slot.animate([{ opacity: 0 }, { opacity: 1 }], { duration: reduced ? 300 : 1200, easing: 'ease', fill: 'forwards' })
+        .finished.then(() => { while (el.ambient.firstChild && el.ambient.firstChild !== slot) el.ambient.firstChild.remove(); })
+        .catch(() => {});
+    }
+
+    function setArt(holder, cover, fade) {
+      if (!holder) return;
+      const old = [...holder.querySelectorAll('img')];
+      holder.classList.toggle('has-art', !!cover);
+      if (!cover) { old.forEach((n) => n.remove()); return; }
+      const img = new Image();
+      img.alt = '';
+      img.src = cover.url;
+      holder.append(img);
+      if (fade && !reduced) {
+        img.animate([{ opacity: 0, filter: 'blur(4px)' }, { opacity: 1, filter: 'blur(0)' }], { duration: 300, easing: EASE_OUT })
+          .finished.then(() => old.forEach((n) => n.remove())).catch(() => {});
+      } else {
+        old.forEach((n) => n.remove());
+      }
+    }
+
+    // ---------- the record swap ----------
+    // A short, direction-aware slide: next arrives from the right, previous from the left.
+    // Exits are quicker than entrances; a skip you asked for is quicker than a song ending.
+    let recordAnim = null, sleeveAnim = null;
+    function moveOut(quick) {
+      phys.seated = false;
+      const out = reduced
+        ? [{ opacity: 1 }, { opacity: 0 }]
+        : [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: `translateX(${-dir * 14}%) scale(0.94)` }];
+      const opts = { duration: reduced ? 160 : quick ? 220 : 380, easing: EASE_OUT, fill: 'forwards' };
+      recordAnim?.cancel();
+      recordAnim = el.record?.animate(out, opts);
+      sleeveAnim?.cancel();
+      sleeveAnim = el.sleeve?.animate(reduced ? out : [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: `translateX(${-dir * 6}%) scale(0.97)` }], opts);
+      return Promise.all([recordAnim?.finished, sleeveAnim?.finished].map((p) => p?.catch(() => {})));
+    }
+    function moveIn(quick) {
+      const inn = reduced
+        ? [{ opacity: 0 }, { opacity: 1 }]
+        : [{ opacity: 0, transform: `translateX(${dir * 14}%) scale(0.94)` }, { opacity: 1, transform: 'none' }];
+      const opts = { duration: reduced ? 220 : quick ? 420 : 640, easing: EASE_OUT, fill: 'forwards' };
+      recordAnim?.cancel();
+      recordAnim = el.record?.animate(inn, { ...opts, delay: el.sleeve && !reduced ? 60 : 0 });
+      sleeveAnim?.cancel();
+      sleeveAnim = el.sleeve?.animate(reduced ? inn : [{ opacity: 0, transform: `translateX(${dir * 6}%) scale(0.97)` }, { opacity: 1, transform: 'none' }], opts);
+      return Promise.all([recordAnim?.finished, sleeveAnim?.finished].map((p) => p?.catch(() => {})));
+    }
+
+    const TEXT = () => [el.title, el.sub, el.artist, el.album, el.credit].filter(Boolean);
+    function textOut() {
+      for (const n of TEXT()) {
+        n.getAnimations().forEach((a) => a.cancel());
+        n.animate(reduced ? [{ opacity: 1 }, { opacity: 0 }]
+          : [{ opacity: 1 }, { opacity: 0, transform: `translateX(${-dir * 6}px)`, filter: 'blur(4px)' }],
+        { duration: 150, easing: EASE_OUT, fill: 'forwards' });
+      }
+    }
+    function textIn() {
+      TEXT().forEach((n, i) => {
+        n.getAnimations().forEach((a) => a.cancel());
+        n.animate(reduced ? [{ opacity: 0 }, { opacity: 1 }]
+          : [{ opacity: 0, transform: `translateX(${dir * 10}px)`, filter: 'blur(4px)' }, { opacity: 1, transform: 'none', filter: 'blur(0)' }],
+        { duration: reduced ? 200 : 360, delay: reduced ? 0 : 40 * i, easing: EASE_OUT, fill: 'backwards' });
+      });
+    }
+
+    function writeText(t) {
+      const by = [t.artist, t.album].filter(Boolean).join(' — ');
+      if (el.title) { el.title.textContent = t.title; el.title.title = t.title; }
+      if (el.sub) { el.sub.textContent = by; el.sub.title = by; }
+      if (el.artist) el.artist.textContent = t.artist || '';
+      if (el.album) el.album.textContent = t.album || '';
+      if (el.credit) {
+        el.credit.replaceChildren();
+        if (t.credit) {
+          const a = document.createElement('a');
+          a.href = t.creditUrl; a.target = '_blank'; a.rel = 'noopener';
+          a.textContent = t.credit;
+          el.credit.append('Cover: ', a, '. The Met, public domain.');
+        }
+      }
+      document.title = isSong(t) ? `${t.title} · ${t.artist || 'Vinyl'}` : 'Vinyl';
+    }
+
+    function want(track) {
+      if (pending) { pending = track; return; }
+      if (shown && shown.id === track.id) { shown = track; return; }
+      pending = track;
+      if (!swapping) swap();
+    }
+
+    async function swap() {
+      swapping = true;
+      wake();
+      const quick = () => now() < quickUntil;
+      let textFor = null;
+      if (shown) {
+        // A skip you asked for answers at once in the words; the record waits for the needle.
+        if (quick() && pending) {
+          textOut();
+          await sleep(150);
+          if (!alive) return;
+          textFor = pending;
+          writeText(textFor);
+          textIn();
+        }
+        const t0 = now();
+        while (alive && phys.arm > OFF_RECORD && now() - t0 < (quick() ? 300 : 900) && !reduced) await sleep(20);
+        if (!textFor) textOut();
+        await moveOut(quick());
+      }
+      while (alive && pending) {
+        const track = pending;
+        const cover = await Promise.race([loadCover(track.art), sleep(1600).then(() => undefined)]);
+        if (!alive) return;
+        if (pending !== track) continue;
+        pending = null;
+        shown = track;
+        setArt(el.label, cover || null, false);
+        setArt(el.sleeve, cover || null, false);
+        showAmbient(cover || null);
+        if (textFor !== track) { writeText(track); textIn(); }
+        textFor = null;
+        phys.recV = 0;
+        await moveIn(quick());
+        if (!alive) return;
+        phys.seated = true;
+        if (cover === undefined) {
+          loadCover(track.art).then((c) => {
+            if (c && alive && shown === track) { setArt(el.label, c, true); setArt(el.sleeve, c, true); showAmbient(c); }
+          });
+        }
+        if (pending) {
+          textOut();
+          await sleep(150);
+          if (pending) { textFor = pending; writeText(textFor); textIn(); }
+          await moveOut(true);
+        }
+      }
+      swapping = false;
       wake();
     }
-  }, { passive: true });
 
-  // ---------- layout ----------
-  function measure() {
-    geom.R = el.record.offsetWidth / 2 || geom.R;
-    geom.scrubW = el.scrub.clientWidth || geom.scrubW;
-    geom.faderW = Math.max(0, el.knob.clientWidth - el.knobCap.offsetWidth) || geom.faderW;
-    renderVolume();
-    fitTitle();
-    renderProgress();
-  }
-  new ResizeObserver(measure).observe(el.app);
-  document.fonts?.ready.then(fitTitle);
+    // ---------- state in, state out ----------
+    function statusTrack(status, message) {
+      const copy = {
+        idle: ['Nothing playing', 'Start a song in Music or Spotify.'],
+        permission: ['Allow Vinyl to see your music', 'System Settings → Privacy & Security → Automation'],
+        error: ['Can’t reach your music app', message || 'The helper hit an error talking to Music or Spotify.'],
+        offline: ['Lost the helper', 'Reconnecting… keep npm start running.'],
+      }[status];
+      return { id: `status:${status}`, status, title: copy[0], artist: copy[1], album: '', duration: 0 };
+    }
 
-  // ---------- start ----------
-  async function start() {
-    measure();
-    el.record.style.transform = `translateX(${offscreen()}px)`;
-    let s = null;
-    try {
-      const res = await within(fetch('api/state', { cache: 'no-store' }), 1500);
-      if (res && res.ok && (res.headers.get('content-type') || '').includes('json')) s = await res.json();
-    } catch {}
-    if (s && s.ok && s.available) live.connect();
-    else demo.start();
+    function sync() {
+      const was = root.dataset.playing === 'true';
+      root.dataset.playing = String(playing());
+      if (playing() && !was) playSince = now();
+      root.dataset.mode = model.mode;
+      el.play?.setAttribute('aria-label', playing() ? 'Pause' : 'Play');
+      if (el.play) el.play.title = playing() ? 'Pause (Space)' : 'Play (Space)';
+      const disabled = !isSong(model.track) && model.mode === 'live';
+      [el.prev, el.play, el.next].forEach((b) => { if (b) b.disabled = disabled; });
+      renderVolume();
+      renderSource();
+      if (model.track) want(model.track);
+      wake();
+    }
+
+    function renderSource() {
+      if (!el.source) return;
+      el.source.replaceChildren();
+      if (model.mode === 'demo') {
+        el.source.append('Demo');
+        return;
+      }
+      const label = model.sourceLabel || 'your Mac';
+      el.source.textContent = {
+        playing: label, paused: label, idle: 'Connected', permission: 'Waiting for permission',
+        error: 'Something went wrong', offline: 'Reconnecting…',
+      }[model.status] || '';
+    }
+
+    function renderVolume() {
+      const v = Math.round(model.volume);
+      if (el.volFill) el.volFill.style.transform = `scaleX(${v / 100})`;
+      el.vol?.setAttribute('aria-valuenow', String(v));
+    }
+
+    // ---------- sources ----------
+    const demo = {
+      list: (window.VINYL_DEMO || []).map((t, i) => ({ ...t, art: o.assetBase + t.art, id: `demo:${i}` })),
+      i: 0,
+      start() { model.mode = 'demo'; model.status = 'playing'; model.sourceLabel = 'Demo'; this.load(0, 74); },
+      load(i, at = 0) {
+        if (!this.list.length) return;
+        this.i = (i + this.list.length) % this.list.length;
+        model.track = this.list[this.i];
+        model.position = at;
+        model.at = now();
+        sync();
+      },
+      tick() {
+        if (playing() && model.track.duration && positionNow() >= model.track.duration) { dir = 1; this.load(this.i + 1); }
+      },
+      send(action, value) {
+        if (action === 'next') this.load(this.i + 1);
+        else if (action === 'previous') this.load(this.i - 1);
+        else if (action === 'volume') model.volume = value;
+        sync();
+        return Promise.resolve();
+      },
+    };
+
+    const live = {
+      events: null,
+      connect() {
+        model.mode = 'live';
+        this.events = new EventSource(o.apiBase + 'api/events');
+        this.events.onmessage = (e) => { try { this.apply(JSON.parse(e.data)); } catch {} };
+        this.events.onerror = () => {
+          if (model.status === 'offline') return;
+          model.status = 'offline';
+          model.track = statusTrack('offline');
+          sync();
+        };
+      },
+      apply(s) {
+        if (!alive) return;
+        if (!s.available) { this.events?.close(); demo.start(); return; }
+        model.sourceLabel = s.sourceLabel || '';
+        if (!s.track) {
+          model.status = s.status === 'permission' || s.status === 'error' ? s.status : 'idle';
+          model.track = statusTrack(model.status, s.message);
+          return sync();
+        }
+        const same = model.track?.id === s.track.id;
+        if (!same && now() > quickUntil) dir = 1;
+        const status = s.status === 'playing' ? 'playing' : 'paused';
+        if (now() > holdStatusUntil || status === model.status) model.status = status;
+        if (!same) model.track = { ...s.track, art: o.apiBase + s.track.art };
+        else Object.assign(model.track, { duration: s.track.duration });
+        if (scrubbing == null) {
+          const predicted = positionNow();
+          if (!same || Math.abs(predicted - s.position) > 0.75 || model.status !== 'playing') {
+            model.position = s.position;
+            model.at = now();
+          }
+        }
+        if (!volDrag) model.volume = s.volume ?? model.volume;
+        sync();
+      },
+      send(action, value) {
+        return fetch(o.apiBase + 'api/control', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-vinyl': '1' },
+          body: JSON.stringify({ action, value }),
+        }).then((r) => (r.ok ? r.json() : null)).then((s) => s && this.apply(s)).catch(() => {});
+      },
+    };
+    const source = () => (model.mode === 'live' ? live : demo);
+
+    // ---------- controls ----------
+    function act(action, value) {
+      if (!isSong(model.track)) return;
+      if (action === 'playpause') {
+        model.position = positionNow(); model.at = now();
+        model.status = playing() ? 'paused' : 'playing';
+        holdStatusUntil = now() + 1500;
+        sync();
+      }
+      if (action === 'next' || action === 'previous') {
+        dir = action === 'next' ? 1 : -1;
+        liftUntil = now() + 1200;
+        quickUntil = now() + 1500;
+      }
+      if (action === 'previous' && positionNow() > 3) { action = 'seek'; value = 0; liftUntil = 0; quickUntil = 0; }
+      if (action === 'seek') {
+        value = clamp(value, 0, model.track.duration || value);
+        model.position = value; model.at = now();
+      }
+      wake();
+      source().send(action, value);
+    }
+
+    on(el.play, 'click', () => act('playpause'));
+    on(el.next, 'click', () => act('next'));
+    on(el.prev, 'click', () => act('previous'));
+    // Touching the record stops it, the way it would on a real deck.
+    on(el.record, 'click', () => act('playpause'));
+
+    // A slider you can grab anywhere: the value jumps to the pointer and follows it 1:1.
+    function slider(node, { get, set, end, keys }) {
+      if (!node) return;
+      const at = (e) => { const r = node.getBoundingClientRect(); return clamp((e.clientX - r.left) / r.width, 0, 1); };
+      let held = false;
+      on(node, 'pointerdown', (e) => {
+        if (e.button > 0) return;
+        held = true;
+        node.setPointerCapture(e.pointerId);
+        node.classList.add('dragging');
+        set(at(e));
+      });
+      on(node, 'pointermove', (e) => { if (held) set(at(e)); });
+      const stop = () => { if (!held) return; held = false; node.classList.remove('dragging'); end?.(); };
+      on(node, 'pointerup', stop);
+      on(node, 'pointercancel', stop);
+      on(node, 'keydown', (e) => {
+        const step = keys[e.key];
+        if (step == null) return;
+        e.preventDefault();
+        e.stopPropagation();
+        set(clamp(get() + step, 0, 1));
+        end?.();
+      });
+    }
+
+    slider(el.scrub, {
+      get: () => (model.track?.duration ? positionNow() / model.track.duration : 0),
+      set: (f) => { if (isSong(model.track) && model.track.duration) { scrubbing = f * model.track.duration; wake(); } },
+      end: () => { if (scrubbing == null) return; const to = scrubbing; scrubbing = null; act('seek', to); },
+      keys: { ArrowRight: 0.02, ArrowLeft: -0.02, PageUp: 0.1, PageDown: -0.1, Home: -1, End: 1 },
+    });
+
+    let volDrag = false, volumeTimer = 0;
+    function setVolume(v) {
+      model.volume = clamp(Math.round(v), 0, 100);
+      renderVolume();
+      clearTimeout(volumeTimer);
+      volumeTimer = setTimeout(() => source().send('volume', model.volume), 90);
+    }
+    slider(el.vol, {
+      get: () => model.volume / 100,
+      set: (f) => { volDrag = true; setVolume(f * 100); },
+      end: () => { volDrag = false; },
+      keys: { ArrowRight: 0.05, ArrowUp: 0.05, ArrowLeft: -0.05, ArrowDown: -0.05, Home: -1, End: 1 },
+    });
+    on(el.vol, 'wheel', (e) => {
+      e.preventDefault();
+      const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : -e.deltaY;
+      setVolume(model.volume + d * 0.06);
+    }, { passive: false });
+
+    // Keyboard shortcuts switch state instantly: they are pressed far too often to animate.
+    on(window, 'keydown', (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+      const onButton = e.target.closest?.('button, a');
+      const instant = () => {
+        root.dataset.instant = '';
+        requestAnimationFrame(() => requestAnimationFrame(() => delete root.dataset.instant));
+      };
+      if (e.key === ' ' && !onButton) { e.preventDefault(); instant(); act('playpause'); }
+      else if (o.arrowKeys && e.key === 'ArrowRight') { e.preventDefault(); e.shiftKey ? act('seek', positionNow() + 10) : act('next'); }
+      else if (o.arrowKeys && e.key === 'ArrowLeft') { e.preventDefault(); e.shiftKey ? act('seek', positionNow() - 10) : act('previous'); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setVolume(model.volume + 5); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); setVolume(model.volume - 5); }
+      else if (e.key === 'f' || e.key === 'F') toggleFull();
+    });
+
+    // ---------- full screen, idle, light ----------
+    let wakeLock = null;
+    async function holdScreen(want) {
+      try {
+        if (want && !wakeLock && navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen');
+        if (!want && wakeLock) { await wakeLock.release(); wakeLock = null; }
+      } catch { wakeLock = null; }
+    }
+    function toggleFull() {
+      const d = document;
+      const active = d.fullscreenElement || d.webkitFullscreenElement;
+      const req = root.requestFullscreen || root.webkitRequestFullscreen;
+      const exit = d.exitFullscreen || d.webkitExitFullscreen;
+      try { (active ? exit?.call(d) : req?.call(root))?.catch?.(() => {}); } catch {}
+    }
+    on(el.full, 'click', toggleFull);
+    const onFull = () => {
+      const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      if (isFull) root.dataset.full = ''; else delete root.dataset.full;
+      el.full?.setAttribute('aria-label', isFull ? 'Exit full screen' : 'Full screen');
+      holdScreen(isFull);
+    };
+    on(document, 'fullscreenchange', onFull);
+    on(document, 'webkitfullscreenchange', onFull);
+
+    let idleTimer = 0;
+    on(window, 'pointermove', (e) => {
+      if (e.pointerType === 'mouse') {
+        delete root.dataset.idle;
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => { root.dataset.idle = ''; }, 2600);
+      }
+      // The light on the vinyl leans toward the pointer, on a spring.
+      if (!reduced) {
+        phys.sheenTarget = (e.clientX / innerWidth - 0.5) * 16 + (e.clientY / innerHeight - 0.5) * -6;
+        wake();
+      }
+    }, { passive: true });
+
+    // ---------- layout ----------
+    function measure() {
+      geom.R = (el.record?.offsetWidth || 600) / 2;
+      geom.scrubW = el.scrub?.clientWidth || geom.scrubW;
+      renderProgress();
+    }
+    const ro = new ResizeObserver(measure);
+    ro.observe(root);
+    cleanups.push(() => ro.disconnect());
+
+    // ---------- start ----------
+    (async () => {
+      measure();
+      showAmbient(null);
+      let s = null;
+      try {
+        const res = await Promise.race([fetch(o.apiBase + 'api/state', { cache: 'no-store' }), sleep(1500).then(() => null)]);
+        if (res && res.ok && (res.headers.get('content-type') || '').includes('json')) s = await res.json();
+      } catch {}
+      if (!alive) return;
+      if (s && s.ok && s.available) live.connect();
+      else demo.start();
+    })();
+
+    return {
+      destroy() {
+        alive = false;
+        cleanups.forEach((f) => f());
+        cancelAnimationFrame(rafId);
+        clearTimeout(idleTimer);
+        clearTimeout(volumeTimer);
+        live.events?.close();
+        holdScreen(false);
+      },
+    };
   }
-  start();
+
+  mount(document.getElementById('app'), { tone: 'light', restWhenPaused: true, armDelay: 520 });
 })();
