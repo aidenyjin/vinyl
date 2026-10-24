@@ -157,6 +157,7 @@ body {
 }
 
 .deck > * { position: absolute; }
+.deck { pointer-events: none; }
 
 /* ---------- the record ---------- */
 /* A shallow shadow where the platter would be: the record rests on the room itself. */
@@ -177,7 +178,15 @@ body {
   border-radius: 50%;
   box-shadow: 0 calc(var(--R) * 0.03) calc(var(--R) * 0.12) rgba(0, 0, 0, 0.32);
   will-change: transform;
+  pointer-events: auto;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+  transition: scale 150ms var(--ease-out);
 }
+/* Pressing the record is how you stop it; `scale` composes with the swap's transform. */
+.record:active { scale: 0.985; }
 .record > * { position: absolute; inset: 0; border-radius: 50%; }
 /* Plain black, three faint bands between the tracks, and a hairline of light at the edge. */
 .vinyl {
@@ -271,6 +280,8 @@ body {
 .arm .weight { fill: var(--arm-dim); }
 .arm .pin { fill: #9d9c96; }
 .arm-base .base { fill: rgba(0, 0, 0, 0.1); }
+/* In light rooms the ivory arm keeps its edge with a hairline. */
+:root[data-light='true'] .arm :is(.tube, .pivot, .head, .weight, .lift) { stroke: rgba(0, 0, 0, 0.16); stroke-width: 0.5; }
 .arm-base .rest { fill: rgba(0, 0, 0, 0.12); }
 
 /* ---------- the song ---------- */
@@ -338,6 +349,12 @@ body {
 }
 .scrub .track { background: var(--line); }
 .scrub .fill { background: var(--ink); transform-origin: left center; transform: scaleX(0); }
+/* The line thickens under the pointer and while held: `scale` composes with the fill's scaleX. */
+.scrub .track, .scrub .fill { transition: scale 150ms var(--ease-out); }
+.scrub.dragging .track, .scrub.dragging .fill { scale: 1 1.7; }
+@media (hover: hover) and (pointer: fine) {
+  .scrub:hover .track, .scrub:hover .fill { scale: 1 1.7; }
+}
 .scrub .thumb {
   position: absolute;
   left: -6px;
@@ -450,7 +467,11 @@ body {
   background: var(--ink);
   transition: scale 150ms var(--ease-out);
 }
-.fader.dragging .cap { scale: 1.2; }
+.fader.dragging .cap { scale: 1.25; }
+@media (hover: hover) and (pointer: fine) {
+  .fader:hover .cap { scale: 1.15; }
+  .fader.dragging .cap { scale: 1.25; }
+}
 
 .source {
   margin: 0;
@@ -486,7 +507,7 @@ body {
   place-items: center;
   cursor: pointer;
   touch-action: manipulation;
-  transition: opacity 400ms ease, transform 150ms var(--ease-out), background-color 200ms ease;
+  transition: opacity 150ms ease, transform 150ms var(--ease-out), background-color 200ms ease;
 }
 .corner svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; grid-area: 1 / 1; }
 .corner .i-exit, .app[data-full] .corner .i-enter { display: none; }
@@ -506,7 +527,7 @@ body {
   display: flex;
   align-items: center;
   gap: 18px;
-  transition: opacity 400ms ease;
+  transition: opacity 150ms ease;
 }
 .keys kbd {
   font: inherit;
@@ -526,7 +547,7 @@ body {
 
 /* The chrome steps back when the pointer rests. */
 .app[data-idle] { cursor: none; }
-.app[data-idle] .corner, .app[data-idle] .keys { opacity: 0; }
+.app[data-idle] .corner, .app[data-idle] .keys { opacity: 0; transition-duration: 700ms; }
 
 @container (width < 760px) or (aspect-ratio < 1.15) {
   .title { font-size: 44px; }

@@ -57,6 +57,7 @@
   let scrubbing = null;     // seconds while the scrubber is held
   let holdStatusUntil = 0;  // keep an optimistic play/pause until the Mac catches up
   let liftUntil = 0;        // lift the arm early when the user skips
+  let quickUntil = 0;       // a skip the user asked for swaps records briskly
 
   const isSong = (t) => !!t && !t.status;
   const playing = () => model.status === 'playing' && isSong(model.track);
@@ -277,6 +278,7 @@
     s.setProperty('--on-accent', t.onAccent);
     (t.blobs || DEFAULT_THEME.blobs).forEach((c, i) => s.setProperty(`--c${i + 1}`, c));
     s.colorScheme = t.light ? 'light' : 'dark';
+    document.documentElement.dataset.light = String(!!t.light);
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t.field);
   }
 
@@ -317,50 +319,56 @@
   function offscreen() {
     return -(el.record.offsetLeft + geom.R * 2.1);
   }
-  function slideOut() {
+  // Exits are quicker than entrances, and a skip you asked for is quicker than a song ending.
+  function slideOut(quick) {
     phys.seated = false;
     recordAnim?.cancel();
     if (reduced) {
-      recordAnim = el.record.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, fill: 'forwards' });
+      recordAnim = el.record.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, fill: 'forwards' });
     } else {
       const x = offscreen(), R = geom.R;
       recordAnim = el.record.animate([
         { transform: 'translate(0, 0) scale(1)' },
         { transform: 'translate(0, 0) scale(1.035)', offset: 0.2 },
         { transform: `translate(${x}px, ${R * 0.06}px) scale(1.035)` },
-      ], { duration: 620, easing: 'cubic-bezier(0.77, 0, 0.175, 1)', fill: 'forwards' });
+      ], { duration: quick ? 340 : 560, easing: 'cubic-bezier(0.77, 0, 0.175, 1)', fill: 'forwards' });
     }
     return recordAnim.finished.catch(() => {});
   }
-  function slideIn() {
+  function slideIn(quick) {
     recordAnim?.cancel();
     if (reduced) {
-      recordAnim = el.record.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 240, fill: 'forwards' });
+      recordAnim = el.record.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, fill: 'forwards' });
     } else {
       const x = offscreen(), R = geom.R;
       recordAnim = el.record.animate([
         { transform: `translate(${x}px, ${-R * 0.06}px) scale(1.035)` },
         { transform: 'translate(0, 0) scale(1.035)', offset: 0.82 },
         { transform: 'translate(0, 0) scale(1)' },
-      ], { duration: 980, easing: 'cubic-bezier(0.23, 1, 0.32, 1)', fill: 'forwards' });
+      ], { duration: quick ? 520 : 820, easing: 'cubic-bezier(0.23, 1, 0.32, 1)', fill: 'forwards' });
     }
     el.record.style.transform = '';
     return recordAnim.finished.catch(() => {});
   }
 
+  // Text leaves fast and arrives in a short stagger. Under reduced motion both are plain cross-fades.
+  const TEXT = () => [el.title, el.artist, el.album, el.credit];
   function textOut() {
-    for (const n of [el.title, el.artist, el.album, el.credit]) {
+    for (const n of TEXT()) {
       n.getAnimations().forEach((a) => a.cancel());
-      n.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateY(-6px)', filter: 'blur(3px)' }],
-        { duration: 180, easing: 'ease-out', fill: 'forwards' });
+      n.animate(reduced
+        ? [{ opacity: 1 }, { opacity: 0 }]
+        : [{ opacity: 1 }, { opacity: 0, transform: 'translateY(-6px)', filter: 'blur(4px)' }],
+      { duration: 150, easing: 'cubic-bezier(0.23, 1, 0.32, 1)', fill: 'forwards' });
     }
   }
   function textIn() {
-    [el.title, el.artist, el.album, el.credit].forEach((n, i) => {
+    TEXT().forEach((n, i) => {
       n.getAnimations().forEach((a) => a.cancel());
-      if (reduced) return;
-      n.animate([{ opacity: 0, transform: 'translateY(12px)', filter: 'blur(3px)' }, { opacity: 1, transform: 'none', filter: 'blur(0)' }],
-        { duration: 520, delay: 60 * i, easing: 'cubic-bezier(0.23, 1, 0.32, 1)', fill: 'backwards' });
+      n.animate(reduced
+        ? [{ opacity: 0 }, { opacity: 1 }]
+        : [{ opacity: 0, transform: 'translateY(10px)', filter: 'blur(4px)' }, { opacity: 1, transform: 'none', filter: 'blur(0)' }],
+      { duration: reduced ? 200 : 420, delay: reduced ? 0 : 50 * i, easing: 'cubic-bezier(0.23, 1, 0.32, 1)', fill: 'backwards' });
     });
   }
 
@@ -430,12 +438,22 @@
   async function swap() {
     swapping = true;
     wake();
+    const quick = () => now() < quickUntil;
+    let textFor = null;     // the track whose words are already showing
     if (shown) {
+      // A skip you asked for answers at once in the words; the record still waits for the needle.
+      if (quick() && pending) {
+        textOut();
+        await sleep(150);
+        textFor = pending;
+        writeText(textFor);
+        textIn();
+      }
       // Never pull a record out from under the needle.
       const t0 = now();
-      while (phys.arm > OFF_RECORD && now() - t0 < 1400 && !reduced) await sleep(30);
-      textOut();
-      await slideOut();
+      while (phys.arm > OFF_RECORD && now() - t0 < (quick() ? 500 : 1400) && !reduced) await sleep(20);
+      if (!textFor) textOut();
+      await slideOut(quick());
     }
     while (pending) {
       const track = pending;
@@ -445,15 +463,21 @@
       shown = track;
       setLabel(cover || null, false);
       paint(cover?.theme);
-      writeText(track);
-      textIn();
+      if (textFor !== track) { writeText(track); textIn(); }
+      textFor = null;
       phys.recV = 0;
-      await slideIn();
+      await slideIn(quick());
       phys.seated = true;
       if (cover === undefined) {
         loadCover(track.art).then((c) => { if (c && shown === track) { setLabel(c, true); paint(c.theme); } });
       }
-      if (pending) { textOut(); await slideOut(); }
+      if (pending) {
+        // Asked for another while this one was arriving: words first, then the record.
+        textOut();
+        await sleep(150);
+        if (pending) { textFor = pending; writeText(textFor); textIn(); }
+        await slideOut(true);
+      }
     }
     swapping = false;
     wake();
@@ -599,7 +623,7 @@
       holdStatusUntil = now() + 1500;
       sync();
     }
-    if (action === 'next' || action === 'previous') liftUntil = now() + 1800;
+    if (action === 'next' || action === 'previous') { liftUntil = now() + 1200; quickUntil = now() + 1500; }
     if (action === 'previous' && positionNow() > 3) { action = 'seek'; value = 0; liftUntil = 0; }
     if (action === 'seek') {
       value = clamp(value, 0, model.track.duration || value);
@@ -610,6 +634,8 @@
   }
 
   el.play.addEventListener('click', () => act('playpause'));
+  // Touching the record stops it, the way it would on a real deck.
+  el.record.addEventListener('click', () => act('playpause'));
   el.next.addEventListener('click', () => act('next'));
   el.prev.addEventListener('click', () => act('previous'));
 
