@@ -71,7 +71,10 @@ body {
 }
 ::selection { background: var(--accent); color: var(--on-accent); }
 
-.app { position: relative; height: 100%; height: 100dvh; overflow: hidden; container-type: size; }
+/* The app carries its own background: in full screen it is the top layer, and anything
+   transparent would show the browser's black backdrop instead of the room. */
+.app { position: relative; height: 100%; height: 100dvh; overflow: hidden; container-type: size; background: var(--field); }
+.app::backdrop { background: var(--field); }
 
 /* ---------- the room ---------- */
 /* Light from the cover pools under the deck, and comes up when the needle drops. */
