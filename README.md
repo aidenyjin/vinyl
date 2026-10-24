@@ -1,6 +1,6 @@
 # Vinyl
 
-A turntable for your Mac's screen. Vinyl shows the song playing in Apple Music or Spotify as a record turning at an easy pace, with the cover art as its label. Each cover sets the colour of the room.
+A turntable for your Mac's screen. Vinyl shows the song playing in Apple Music or Spotify as a record turning at an easy pace, with the cover art as its label. Each cover sets the colour of the room, and its colours drift slowly behind the record while it plays.
 
 - The tonearm is the progress bar. It moves from the edge of the record toward the label as the song plays, lifts when you pause, and cues across the record when you scrub.
 - When the song changes, the arm lifts off, the record slides away and the next one drops onto the platter.
@@ -34,7 +34,7 @@ In Safari, open <http://localhost:4747> and choose **File → Add to Dock**. Vin
 | ↑ ↓ | Volume |
 | F | Full screen. The screen stays awake while it's full screen. |
 
-The keys and the volume fader on the front of the deck work with a mouse or a finger. Drag the fader, click anywhere along it, or scroll on it.
+The volume line beside the play button works with a mouse or a finger: drag the dot, click anywhere along the line, or scroll on it.
 
 ### Options
 

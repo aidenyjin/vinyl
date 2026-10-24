@@ -36,12 +36,12 @@
 
   // ---------- elements ----------
   const el = {
-    app: $('app'), record: $('record'), spin: $('spin'), strobe: $('strobe'), sheen: $('sheen'),
+    app: $('app'), record: $('record'), spin: $('spin'), sheen: $('sheen'),
     arm: $('arm'), armShadow: $('armShadow'), label: $('label'),
     sourceText: $('sourceText'), title: $('title'), artist: $('artist'), album: $('album'), credit: $('credit'),
     scrub: $('scrub'), fill: $('fill'), thumb: $('thumb'), elapsed: $('elapsed'), remaining: $('remaining'),
     prev: $('prev'), play: $('play'), next: $('next'),
-    knob: $('knob'), knobLevel: $('knobLevel'), knobCap: $('knobCap'), knobValue: $('knobValue'), full: $('fullscreen'),
+    knob: $('knob'), knobLevel: $('knobLevel'), knobCap: $('knobCap'), full: $('fullscreen'),
   };
 
   // ---------- what is playing ----------
@@ -128,7 +128,6 @@
   function render() {
     const R = geom.R, lift = phys.lift;
     el.spin.style.transform = `rotate(${(phys.rec % 360).toFixed(2)}deg)`;
-    el.strobe.style.transform = `rotate(${(phys.platter % 360).toFixed(2)}deg)`;
     el.sheen.style.transform = `rotate(${(-40 + phys.sheen).toFixed(2)}deg)`;
     el.arm.style.transform = `rotate(${phys.arm.toFixed(3)}deg) scale(${(1 + 0.02 * lift).toFixed(4)})`;
     el.armShadow.style.transform =
@@ -228,11 +227,19 @@
       const score = Math.sqrt(c.n) * (0.15 + c.sat) * (hueApart ? 1.4 : 0.6);
       if (score > best) { best = score; accent = c; }
     }
+    // The moving background takes the cover's three strongest colours, each a different hue where it can.
+    const fields = [];
+    for (const c of [...list].sort((a, b) => b.n * (0.2 + b.sat) - a.n * (0.2 + a.sat))) {
+      const hue = Math.floor(c.key / 6);
+      if (!fields.some((f) => Math.floor(f.key / 6) === hue)) fields.push(c);
+      if (fields.length === 3) break;
+    }
+    while (fields.length < 3) fields.push(fields[fields.length - 1] || main);
     const light = rgbToHsl(...main.rgb)[2] > 0.58 || total / (size * size) > 0.62;
-    return theme(main.rgb, (accent || main).rgb, light);
+    return theme(main.rgb, (accent || main).rgb, light, fields.map((f) => f.rgb));
   }
 
-  function theme(mainRgb, accentRgb, light) {
+  function theme(mainRgb, accentRgb, light, fieldRgbs = []) {
     const [h, s, l] = rgbToHsl(...mainRgb);
     const field = light
       ? hslToRgb(h, Math.min(s, 0.34), clamp(l, 0.8, 0.88))
@@ -246,10 +253,21 @@
       accent = hslToRgb(ah, as, al);
     }
     const onAccent = contrast(field, accent) >= contrast(ink, accent) ? field : ink;
-    return { field: css(field), ink: css(ink), accent: css(accent), onAccent: css(onAccent), light };
+    // Background fields keep their hue and colour but sit near the room's lightness,
+    // so the text reads the same wherever they drift.
+    const blobs = fieldRgbs.map((rgb) => {
+      const [bh, bs, bl] = rgbToHsl(...rgb);
+      return css(light
+        ? hslToRgb(bh, Math.min(bs * 1.1, 0.6), clamp(bl, 0.64, 0.76))
+        : hslToRgb(bh, Math.min(bs * 1.15, 0.62), clamp(bl * 0.8, 0.24, 0.36)));
+    });
+    return { field: css(field), ink: css(ink), accent: css(accent), onAccent: css(onAccent), light, blobs };
   }
 
-  const DEFAULT_THEME = { field: '#1c221f', ink: '#eef1ec', accent: '#d8c46c', onAccent: '#1c221f', light: false };
+  const DEFAULT_THEME = {
+    field: '#1c221f', ink: '#eef1ec', accent: '#d8c46c', onAccent: '#1c221f', light: false,
+    blobs: ['#2f5d4f', '#5e5428', '#26453f'],
+  };
   function paint(t) {
     t = t || DEFAULT_THEME;
     const s = document.documentElement.style;
@@ -257,6 +275,7 @@
     s.setProperty('--ink', t.ink);
     s.setProperty('--accent', t.accent);
     s.setProperty('--on-accent', t.onAccent);
+    (t.blobs || DEFAULT_THEME.blobs).forEach((c, i) => s.setProperty(`--c${i + 1}`, c));
     s.colorScheme = t.light ? 'light' : 'dark';
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t.field);
   }
@@ -489,7 +508,6 @@
     const v = Math.round(model.volume);
     el.knobLevel.style.transform = `scaleX(${v / 100})`;
     el.knobCap.style.transform = `translateX(${((v / 100) * geom.faderW).toFixed(1)}px)`;
-    el.knobValue.textContent = String(v);
     el.knob.setAttribute('aria-valuenow', String(v));
   }
 
