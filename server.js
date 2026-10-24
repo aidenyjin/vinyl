@@ -124,7 +124,10 @@ function readJson(req) {
     let raw = '';
     req.on('data', (chunk) => {
       raw += chunk;
-      if (raw.length > 4096) req.destroy();
+      if (raw.length > 4096) {
+        reject(new Error('Body too large.'));
+        req.destroy();
+      }
     });
     req.on('end', () => {
       try {
@@ -176,7 +179,12 @@ async function serveArt(id, res) {
 }
 
 async function serveStatic(pathname, res) {
-  const rel = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, '');
+  let rel;
+  try {
+    rel = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, '');
+  } catch {
+    return send(res, 400, 'Bad request', 'text/plain');
+  }
   const file = path.normalize(path.join(PUBLIC, rel));
   if (!file.startsWith(PUBLIC + path.sep)) return send(res, 403, 'Forbidden', 'text/plain');
   try {

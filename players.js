@@ -67,67 +67,67 @@ function normaliseState(s) {
 const MUSIC_STATUS = `
 set sep to character id 31
 tell application "Music"
-  set st to player state as text
-  if st is "stopped" then return "stopped"
+  set v_st to player state as text
+  if v_st is "stopped" then return "stopped"
   try
-    set t to current track
+    set v_t to current track
   on error
     return "stopped"
   end try
-  set nm to ""
-  set ar to ""
-  set al to ""
-  set du to 0
-  set po to 0
-  set ac to 0
+  set v_nm to ""
+  set v_ar to ""
+  set v_al to ""
+  set v_du to 0
+  set v_po to 0
+  set v_ac to 0
   try
-    set nm to name of t
+    set v_nm to name of v_t
   end try
   try
-    set ar to artist of t
+    set v_ar to artist of v_t
   end try
   try
-    set al to album of t
+    set v_al to album of v_t
   end try
   try
-    set du to round ((duration of t) * 1000)
+    set v_du to round ((duration of v_t) * 1000)
   end try
   try
-    set po to round ((player position) * 1000)
+    set v_po to round ((player position) * 1000)
   end try
   try
-    set ac to count of artworks of t
+    set v_ac to count of artworks of v_t
   end try
-  if nm is "" then
+  if v_nm is "" then
     try
-      set nm to current stream title
+      set v_nm to current stream title
     end try
   end if
-  set vo to sound volume
-  return st & sep & nm & sep & ar & sep & al & sep & du & sep & po & sep & vo & sep & ac
+  set v_vo to sound volume
+  return v_st & sep & v_nm & sep & v_ar & sep & v_al & sep & v_du & sep & v_po & sep & v_vo & sep & v_ac
 end tell`;
 
 const SPOTIFY_STATUS = `
 set sep to character id 31
 tell application "Spotify"
-  set st to player state as text
-  if st is "stopped" then return "stopped"
+  set v_st to player state as text
+  if v_st is "stopped" then return "stopped"
   try
-    set t to current track
+    set v_t to current track
   on error
     return "stopped"
   end try
-  set nm to name of t
-  set ar to artist of t
-  set al to album of t
-  set du to duration of t
-  set po to round ((player position) * 1000)
-  set vo to sound volume
-  set au to ""
+  set v_nm to name of v_t
+  set v_ar to artist of v_t
+  set v_al to album of v_t
+  set v_du to duration of v_t
+  set v_po to round ((player position) * 1000)
+  set v_vo to sound volume
+  set v_au to ""
   try
-    set au to artwork url of t
+    set v_au to artwork url of v_t
   end try
-  return st & sep & nm & sep & ar & sep & al & sep & du & sep & po & sep & vo & sep & au
+  return v_st & sep & v_nm & sep & v_ar & sep & v_al & sep & v_du & sep & v_po & sep & v_vo & sep & v_au
 end tell`;
 
 function parseStatus(app, out) {
