@@ -1,6 +1,6 @@
 # Vinyl
 
-A turntable for your Mac's screen. Vinyl shows the song playing in Apple Music or Spotify as a record spinning at 33⅓, with the cover art as its label. Each cover sets the colour of the room.
+A turntable for your Mac's screen. Vinyl shows the song playing in Apple Music or Spotify as a record turning at an easy pace, with the cover art as its label. Each cover sets the colour of the room.
 
 - The tonearm is the progress bar. It moves from the edge of the record toward the label as the song plays, lifts when you pause, and cues across the record when you scrub.
 - When the song changes, the arm lifts off, the record slides away and the next one drops onto the platter.

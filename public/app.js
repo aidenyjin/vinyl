@@ -16,7 +16,7 @@
   const REST = -4;                          // degrees, arm on its rest post
   const OUTER = 0.955;                      // lead-in groove
   const INNER = 0.52;                       // run-out groove
-  const SPEED = (100 / 3) * 6;              // 33⅓ rpm in degrees per second
+  const SPEED = 80;                         // degrees per second, about 13 rpm. True 33⅓ (200) looks frantic on a screen.
 
   function stylusRadius(deg) {
     const a = (deg * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
@@ -85,7 +85,7 @@
 
   function step(dt) {
     const motor = playing() && !reduced;
-    phys.platterV = approach(phys.platterV, motor ? SPEED : 0, motor ? 0.35 : 0.8, dt);
+    phys.platterV = approach(phys.platterV, motor ? SPEED : 0, motor ? 0.9 : 1.6, dt);
     phys.platter += phys.platterV * dt;
     phys.recV = phys.seated ? approach(phys.recV, phys.platterV, 0.2, dt) : approach(phys.recV, 0, 1.6, dt);
     phys.rec += phys.recV * dt;
