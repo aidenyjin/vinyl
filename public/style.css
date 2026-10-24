@@ -119,12 +119,11 @@ body {
     0 1px 2px rgba(var(--shadow), 0.14),
     0 calc(var(--R) * 0.1) calc(var(--R) * 0.22) calc(var(--R) * -0.06) rgba(var(--shadow), 0.32);
 }
-/* Years in a crate leave a ring where the record pressed against the card. */
+/* A hairline edge so a pale cover still reads as card against paper. */
 .sleeve::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 50% 50%, transparent 0 45.4%, rgba(255, 255, 255, 0.09) 46% 46.8%, transparent 47.6%);
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
 }
 .label img, .sleeve img {
